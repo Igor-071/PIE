@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["adm-zip", "pdf-parse", "mammoth"],
   // Set output file tracing root to silence lockfile warnings
   outputFileTracingRoot: path.resolve(__dirname, "../.."),
+  // Empty turbopack config to silence warning (we use webpack for dynamic imports)
+  turbopack: {},
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Add parent dist directory to webpack resolve for dynamic imports
