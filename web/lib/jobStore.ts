@@ -20,6 +20,7 @@ export interface JobState {
   outputDir?: string;
   projectName?: string;
   cancelled?: boolean;
+  createdAt: number; // Timestamp when job was created
 }
 
 // Use a global Map to ensure persistence across API route calls
@@ -33,11 +34,13 @@ const jobs = globalJobs;
 
 export function createJob(): string {
   const id = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const createdAt = Date.now();
   const jobState: JobState = {
     id,
     status: "pending",
     progress: 0,
     message: "Job created",
+    createdAt,
   };
   jobs.set(id, jobState);
   console.log(`[jobStore] Created job ${id}, total jobs: ${jobs.size}`);
@@ -91,9 +94,11 @@ export function isJobCancelled(id: string): boolean {
 setInterval(() => {
   const oneHourAgo = Date.now() - 60 * 60 * 1000;
   for (const [id, job] of jobs.entries()) {
-    const jobTimestamp = parseInt(id.split("-")[1]);
+    // Use createdAt timestamp if available, otherwise fallback to parsing from ID
+    const jobTimestamp = job.createdAt || parseInt(id.split("-")[1] || "0");
     if (jobTimestamp < oneHourAgo) {
       jobs.delete(id);
+      console.log(`[jobStore] Cleaned up old job ${id}`);
     }
   }
 }, 60 * 60 * 1000); // Run every hour

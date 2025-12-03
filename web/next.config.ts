@@ -4,9 +4,8 @@ import * as path from "path";
 const nextConfig: NextConfig = {
   /* config options here */
   serverExternalPackages: ["adm-zip", "pdf-parse", "mammoth"],
-  experimental: {
-    serverComponentsExternalPackages: ["adm-zip", "pdf-parse", "mammoth"],
-  },
+  // Set output file tracing root to silence lockfile warnings
+  outputFileTracingRoot: path.resolve(__dirname, "../.."),
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Add parent dist directory to webpack resolve for dynamic imports
