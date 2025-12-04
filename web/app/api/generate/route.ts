@@ -5,6 +5,13 @@ import * as dotenv from "dotenv";
 import { createJob, updateJob, isJobCancelled } from "@/lib/jobStore";
 import { loadCoreModules, type CoreModules } from "@/lib/coreModules";
 
+// Route segment configuration for Next.js App Router
+// Increase timeout for long-running PRD generation (5 minutes)
+export const maxDuration = 300;
+
+// Set runtime to nodejs to handle file processing
+export const runtime = "nodejs";
+
 // Load environment variables from parent directory
 const envPath = path.join(process.cwd(), "..", ".env");
 dotenv.config({ path: envPath });
@@ -12,6 +19,8 @@ console.log(`[generate] Loading env from: ${envPath}`);
 console.log(`[generate] OPENAI_API_KEY exists: ${!!process.env.OPENAI_API_KEY}`);
 
 export async function POST(request: NextRequest) {
+  console.log("[generate] POST request received");
+  
   // Ensure we always return JSON, even if there's an unexpected error
   try {
     // Load core modules using the wrapper
@@ -53,10 +62,17 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      console.log("[generate] Parsing form data...");
       const formData = await request.formData();
+      console.log("[generate] Form data parsed successfully");
+      
       const zipFile = formData.get("zipFile") as File | null;
       const briefText = formData.get("briefText") as string | null;
       const briefFiles = formData.getAll("briefFiles") as File[];
+
+      console.log(`[generate] ZIP file: ${zipFile ? `${zipFile.name} (${zipFile.size} bytes)` : 'none'}`);
+      console.log(`[generate] Brief text: ${briefText ? briefText.length + ' chars' : 'none'}`);
+      console.log(`[generate] Brief files: ${briefFiles.length}`);
 
       if (!zipFile) {
         return NextResponse.json(
@@ -96,19 +112,24 @@ export async function POST(request: NextRequest) {
 
       // Create job
       const jobId = createJob();
-      console.log("Created job:", jobId);
+      console.log("[generate] Created job:", jobId);
 
       // Process asynchronously with imported modules
-      processJob(jobId, zipFile, briefText, briefFiles, coreModules).catch((error) => {
-        console.error("[generate] Error in processJob:", error);
-        updateJob(jobId, {
-          status: "error",
-          progress: 0,
-          message: "Processing failed",
-          error: error instanceof Error ? error.message : String(error),
+      // Use setImmediate to ensure the response is sent before processing starts
+      setImmediate(() => {
+        processJob(jobId, zipFile, briefText, briefFiles, coreModules).catch((error) => {
+          console.error("[generate] Error in processJob:", error);
+          console.error("[generate] Error stack:", error instanceof Error ? error.stack : undefined);
+          updateJob(jobId, {
+            status: "error",
+            progress: 0,
+            message: "Processing failed",
+            error: error instanceof Error ? error.message : String(error),
+          });
         });
       });
 
+      console.log("[generate] Returning success response for job:", jobId);
       return NextResponse.json({
         jobId,
         status: "pending",
@@ -116,10 +137,24 @@ export async function POST(request: NextRequest) {
       });
     } catch (error) {
       console.error("[generate] Error in POST handler:", error);
+      console.error("[generate] Error stack:", error instanceof Error ? (error as Error).stack : undefined);
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to create job";
+      let details = error instanceof Error ? error.message : String(error);
+      
+      if (details.includes("PayloadTooLargeError") || details.includes("request entity too large")) {
+        errorMessage = "File too large";
+        details = "The uploaded file exceeds the maximum allowed size. Please use a smaller ZIP file.";
+      } else if (details.includes("formData") || details.includes("multipart")) {
+        errorMessage = "Invalid file upload";
+        details = "Failed to process the uploaded file. Please ensure you're uploading a valid ZIP file.";
+      }
+      
       return NextResponse.json(
         {
-          error: "Failed to create job",
-          details: error instanceof Error ? error.message : String(error),
+          error: errorMessage,
+          details,
         },
         { status: 500 }
       );
@@ -127,11 +162,15 @@ export async function POST(request: NextRequest) {
   } catch (outerError) {
     // Catch any errors that might prevent JSON response (e.g., import errors)
     console.error("[generate] Fatal error:", outerError);
+    console.error("[generate] Fatal error stack:", outerError instanceof Error ? (outerError as Error).stack : undefined);
+    
+    // Return a safe error response
     return NextResponse.json(
       {
         error: "Internal server error",
         details: outerError instanceof Error ? outerError.message : String(outerError),
         hint: "Please ensure the parent project is built: npm run build in product-intelligence-engine directory",
+        stack: process.env.NODE_ENV === "development" && outerError instanceof Error ? outerError.stack : undefined,
       },
       { status: 500 }
     );
