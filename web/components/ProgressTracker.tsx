@@ -1,10 +1,21 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
+interface Step {
+  id: string;
+  message: string;
+  timestamp: number;
+  status: 'pending' | 'active' | 'completed';
+  progress?: number;
+}
+
 interface ProgressTrackerProps {
   status: string;
   progress: number;
   message: string;
   error?: string;
+  steps?: Step[];
 }
 
 const statusLabels: Record<string, string> = {
@@ -25,7 +36,7 @@ interface StepInfo {
   icon: string;
 }
 
-const steps: StepInfo[] = [
+const mainSteps: StepInfo[] = [
   {
     key: "unzipping",
     label: "Unzip Repository",
@@ -58,16 +69,38 @@ const steps: StepInfo[] = [
   },
 ];
 
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds} seconds ago`;
+  if (minutes === 1) return "1 minute ago";
+  if (minutes < 60) return `${minutes} minutes ago`;
+  return "a while ago";
+}
+
 export default function ProgressTracker({
   status,
   progress,
   message,
   error,
+  steps = [],
 }: ProgressTrackerProps) {
-  const currentStepIndex = steps.findIndex((step) => step.key === status);
+  const currentStepIndex = mainSteps.findIndex((step) => step.key === status);
   const isComplete = status === "complete";
   const hasError = status === "error";
   const isCancelled = status === "cancelled";
+  const stepsEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new steps are added
+  useEffect(() => {
+    if (stepsEndRef.current) {
+      stepsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [steps]);
 
   return (
     <div className="w-full space-y-6">
@@ -145,7 +178,7 @@ export default function ProgressTracker({
 
       {/* Step Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {steps.map((step, index) => {
+        {mainSteps.map((step, index) => {
           const isActive = index <= currentStepIndex || isComplete;
           const isCurrent = step.key === status;
           const isCompleted = index < currentStepIndex || isComplete;
@@ -226,6 +259,77 @@ export default function ProgressTracker({
           );
         })}
       </div>
+
+      {/* Detailed Step Log */}
+      {steps.length > 0 && (
+        <div className="mt-8 border-t border-[#E7E1E2] pt-6">
+          <h3 className="text-lg font-semibold text-[#161010] mb-4">Detailed Progress</h3>
+          <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
+            {steps.map((step, index) => {
+              const isActive = step.status === 'active';
+              const isCompleted = step.status === 'completed';
+              const isPending = step.status === 'pending';
+
+              return (
+                <div
+                  key={step.id}
+                  className={`flex items-start gap-3 p-3 rounded-lg transition-all ${
+                    isActive
+                      ? "bg-[#F24B57]/5 border-l-4 border-[#F24B57]"
+                      : isCompleted
+                      ? "bg-[#E7E1E2]/20 border-l-4 border-[#E7E1E2]"
+                      : "bg-white/50 border-l-4 border-[#E7E1E2]/50 opacity-60"
+                  }`}
+                >
+                  {/* Status Indicator */}
+                  <div className="flex-shrink-0 mt-0.5">
+                    {isCompleted ? (
+                      <div className="w-5 h-5 rounded-full bg-[#E7E1E2] flex items-center justify-center">
+                        <span className="text-xs text-[#161010] font-bold">✓</span>
+                      </div>
+                    ) : isActive ? (
+                      <div className="w-5 h-5 rounded-full bg-[#F24B57] flex items-center justify-center">
+                        <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-[#E7E1E2] border-2 border-[#E7E1E2]"></div>
+                    )}
+                  </div>
+
+                  {/* Step Content */}
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-sm ${
+                        isActive
+                          ? "text-[#161010] font-medium"
+                          : isCompleted
+                          ? "text-[#161010]"
+                          : "text-[#161010] opacity-60"
+                      }`}
+                    >
+                      {step.message}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-[#161010] opacity-50">
+                        {formatRelativeTime(step.timestamp)}
+                      </span>
+                      {isActive && step.progress !== undefined && (
+                        <>
+                          <span className="text-xs text-[#161010] opacity-50">•</span>
+                          <span className="text-xs text-[#F24B57] font-medium">
+                            {step.progress}%
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={stepsEndRef} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

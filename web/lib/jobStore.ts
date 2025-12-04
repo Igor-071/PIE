@@ -12,6 +12,14 @@ export type JobStatus =
   | "error"
   | "cancelled";
 
+export interface Step {
+  id: string;
+  message: string;
+  timestamp: number;
+  status: 'pending' | 'active' | 'completed';
+  progress?: number; // Optional progress for active steps
+}
+
 export interface JobState {
   id: string;
   status: JobStatus;
@@ -23,6 +31,7 @@ export interface JobState {
   markdownFilename?: string;
   cancelled?: boolean;
   createdAt: number; // Timestamp when job was created
+  steps?: Step[]; // Detailed step tracking
 }
 
 // Use a global Map to ensure persistence across API route calls
@@ -43,6 +52,7 @@ export function createJob(): string {
     progress: 0,
     message: "Job created",
     createdAt,
+    steps: [],
   };
   jobs.set(id, jobState);
   console.log(`[jobStore] Created job ${id}, total jobs: ${jobs.size}`);
@@ -65,6 +75,60 @@ export function updateJob(
   const job = jobs.get(id);
   if (job) {
     jobs.set(id, { ...job, ...updates });
+  }
+}
+
+/**
+ * Adds a new step to the job's step tracking
+ */
+export function addStep(
+  id: string,
+  message: string,
+  status: Step['status'] = 'active',
+  progress?: number
+): void {
+  const job = jobs.get(id);
+  if (job) {
+    const steps = job.steps || [];
+    const stepId = `step-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newStep: Step = {
+      id: stepId,
+      message,
+      timestamp: Date.now(),
+      status,
+      progress,
+    };
+    
+    // Mark previous active step as completed if there is one
+    const updatedSteps = steps.map(step => 
+      step.status === 'active' ? { ...step, status: 'completed' as const } : step
+    );
+    
+    updatedSteps.push(newStep);
+    jobs.set(id, { ...job, steps: updatedSteps });
+  }
+}
+
+/**
+ * Updates the current active step's progress
+ */
+export function updateActiveStep(
+  id: string,
+  progress: number,
+  message?: string
+): void {
+  const job = jobs.get(id);
+  if (job && job.steps) {
+    const steps = [...job.steps];
+    const activeStepIndex = steps.findIndex(step => step.status === 'active');
+    if (activeStepIndex >= 0) {
+      steps[activeStepIndex] = {
+        ...steps[activeStepIndex],
+        progress,
+        ...(message && { message }),
+      };
+      jobs.set(id, { ...job, steps });
+    }
   }
 }
 

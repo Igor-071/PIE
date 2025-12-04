@@ -17,6 +17,14 @@ type JobStatus =
   | "error"
   | "cancelled";
 
+interface Step {
+  id: string;
+  message: string;
+  timestamp: number;
+  status: 'pending' | 'active' | 'completed';
+  progress?: number;
+}
+
 interface JobState {
   id: string;
   status: JobStatus;
@@ -27,6 +35,7 @@ interface JobState {
   projectName?: string;
   markdownFilename?: string;
   networkError?: boolean; // Track if error is network-related
+  steps?: Step[]; // Detailed step tracking
 }
 
 const FETCH_TIMEOUT = 10000; // 10 seconds
@@ -439,6 +448,7 @@ export default function Home() {
                 progress={jobState.progress}
                 message={jobState.message}
                 error={jobState.error}
+                steps={jobState.steps}
               />
               {(jobState.status === "error" || jobState.status === "cancelled") && (
                 <div className="flex gap-3">

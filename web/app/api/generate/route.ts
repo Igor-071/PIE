@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
-import { createJob, updateJob, isJobCancelled } from "@/lib/jobStore";
+import { createJob, updateJob, isJobCancelled, addStep, updateActiveStep } from "@/lib/jobStore";
 import { loadCoreModules, type CoreModules } from "@/lib/coreModules";
 
 // Route segment configuration for Next.js App Router
@@ -209,6 +209,7 @@ async function processJob(
       await fs.mkdir(briefDir, { recursive: true });
 
       // Save uploaded ZIP file
+      addStep(jobId, "Saving uploaded file...", "active");
       updateJob(jobId, {
         status: "unzipping",
         progress: 10,
@@ -222,9 +223,11 @@ async function processJob(
       const arrayBuffer = await zipFile.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       await fs.writeFile(zipPath, buffer);
+      addStep(jobId, "Uploaded file saved", "completed");
 
       // Save brief files if provided
     if (briefFiles && briefFiles.length > 0) {
+      addStep(jobId, `Processing ${briefFiles.length} brief file${briefFiles.length > 1 ? 's' : ''}...`, "active");
       updateJob(jobId, {
         status: "unzipping",
         progress: 12,
@@ -243,9 +246,11 @@ async function processJob(
         await fs.writeFile(briefFilePath, briefBuffer);
         briefFilePaths.push(briefFilePath);
       }
+      addStep(jobId, `Processed ${briefFiles.length} brief file${briefFiles.length > 1 ? 's' : ''}`, "completed");
     }
 
     // Step 1: Unzip repository
+    addStep(jobId, "Unzipping repository...", "active");
     updateJob(jobId, {
       status: "unzipping",
       progress: 20,
@@ -265,12 +270,14 @@ async function processJob(
     let unzippedPath: string | undefined;
 
     unzippedPath = await unzipRepository(zipPath);
+    addStep(jobId, "Repository unzipped successfully", "completed");
     let outputDir: string | undefined;
     let projectName: string | undefined;
     let markdownFilename: string | undefined;
 
     try {
       // Step 2: Extract Tier 1 data
+      addStep(jobId, "Extracting technical data (Tier 1)...", "active");
       updateJob(jobId, {
         status: "tier1",
         progress: 40,
@@ -283,8 +290,10 @@ async function processJob(
 
       const tier1 = await extractTier1(unzippedPath!);
       projectName = tier1.projectName;
+      addStep(jobId, "Technical data extracted (screens, APIs, data models)", "completed");
 
       // Step 3: Collect evidence
+      addStep(jobId, "Collecting evidence from repository...", "active");
       updateJob(jobId, {
         status: "tier1",
         progress: 50,
@@ -299,11 +308,15 @@ async function processJob(
         briefText: briefText || null,
         briefFiles: briefFilePaths.length > 0 ? briefFilePaths : undefined,
       });
+      addStep(jobId, `Collected ${evidence.length} evidence document${evidence.length !== 1 ? 's' : ''}`, "completed");
 
       // Step 4: Build initial PRD JSON
+      addStep(jobId, "Building initial PRD structure...", "active");
       const baseJson = buildInitialPrdJsonFromTier1(tier1);
+      addStep(jobId, "Initial PRD structure created", "completed");
 
       // Step 5: Run Tier 2 agent
+      addStep(jobId, "Running AI analysis (Tier 2: Business Strategy)...", "active");
       updateJob(jobId, {
         status: "tier2",
         progress: 50,
@@ -314,10 +327,22 @@ async function processJob(
         return;
       }
 
+      let lastTier2Message = "";
       const tier2Result = await runTier2Agent(baseJson, evidence, {
         maxQuestions: 7,
         onProgress: (progress: number, message: string) => {
           if (!isJobCancelled(jobId)) {
+            // Create a new step if message changed significantly
+            if (message !== lastTier2Message && lastTier2Message !== "") {
+              addStep(jobId, message, "active", progress);
+            } else if (lastTier2Message === "") {
+              // First progress update - update the existing step
+              updateActiveStep(jobId, progress, message);
+            } else {
+              // Same message, just update progress
+              updateActiveStep(jobId, progress);
+            }
+            lastTier2Message = message;
             updateJob(jobId, {
               status: "tier2",
               progress,
@@ -326,8 +351,10 @@ async function processJob(
           }
         },
       });
+      addStep(jobId, "Tier 2 analysis complete (business strategy, target audience)", "completed");
 
       // Step 6: Run Tier 3 agent
+      addStep(jobId, "Running Tier 3 agent (detailed requirements)...", "active");
       updateJob(jobId, {
         status: "tier3",
         progress: 70,
@@ -338,9 +365,21 @@ async function processJob(
         return;
       }
 
+      let lastTier3Message = "";
       const tier3Result = await runTier3Agent(tier2Result.updatedJson, evidence, tier1, {
         onProgress: (progress: number, message: string) => {
           if (!isJobCancelled(jobId)) {
+            // Create a new step if message changed significantly (new prompt being executed)
+            if (message !== lastTier3Message && lastTier3Message !== "") {
+              addStep(jobId, message, "active", progress);
+            } else if (lastTier3Message === "") {
+              // First progress update - update the existing step
+              updateActiveStep(jobId, progress, message);
+            } else {
+              // Same message, just update progress
+              updateActiveStep(jobId, progress);
+            }
+            lastTier3Message = message;
             updateJob(jobId, {
               status: "tier3",
               progress,
@@ -349,8 +388,10 @@ async function processJob(
           }
         },
       });
+      addStep(jobId, "Tier 3 analysis complete (assumptions, dependencies, requirements)", "completed");
 
       // Step 7: Merge questions from Tier 2 and Tier 3
+      addStep(jobId, "Merging questions from analysis...", "active");
       const allQuestions = {
         questions: [
           ...tier2Result.questionsForClient.questions,
@@ -358,8 +399,10 @@ async function processJob(
         ],
         generatedAt: new Date().toISOString(),
       };
+      addStep(jobId, `Merged ${allQuestions.questions.length} question${allQuestions.questions.length !== 1 ? 's' : ''}`, "completed");
 
       // Step 8: Write artifacts
+      addStep(jobId, "Generating PRD documents (JSON and Markdown)...", "active");
       updateJob(jobId, {
         status: "generating",
         progress: 90,
@@ -379,6 +422,7 @@ async function processJob(
         throw new Error("writePrdArtifacts did not return markdown filename");
       }
       markdownFilename = artifacts.markdownFilename;
+      addStep(jobId, "PRD documents generated successfully", "completed");
       console.log(`[generate] PRD artifacts written successfully. Markdown filename: ${markdownFilename}`);
 
       // Clean up uploaded files
@@ -404,6 +448,7 @@ async function processJob(
 
     // Mark as complete (only if not cancelled and all required fields are set)
     if (!isJobCancelled(jobId) && outputDir && markdownFilename) {
+      addStep(jobId, "PRD generation complete!", "completed");
       updateJob(jobId, {
         status: "complete",
         progress: 100,
