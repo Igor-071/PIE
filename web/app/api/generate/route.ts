@@ -333,6 +333,9 @@ async function processJob(
         outputDir,
         projectName: tier1.projectName,
       });
+      if (!artifacts || !artifacts.markdownFilename) {
+        throw new Error("writePrdArtifacts did not return markdown filename");
+      }
       markdownFilename = artifacts.markdownFilename;
       console.log(`[generate] PRD artifacts written successfully. Markdown filename: ${markdownFilename}`);
 

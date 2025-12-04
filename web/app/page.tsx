@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import FileUpload from "@/components/FileUpload";
 import BriefFileUpload from "@/components/BriefFileUpload";
 import ProgressTracker from "@/components/ProgressTracker";
@@ -25,7 +25,12 @@ interface JobState {
   outputDir?: string;
   projectName?: string;
   markdownFilename?: string;
+  networkError?: boolean; // Track if error is network-related
 }
+
+const FETCH_TIMEOUT = 10000; // 10 seconds
+const MAX_RETRIES = 3;
+const POLL_INTERVAL = 2000; // 2 seconds
 
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -33,44 +38,215 @@ export default function Home() {
   const [briefFiles, setBriefFiles] = useState<File[]>([]);
   const [jobState, setJobState] = useState<JobState | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Helper function to fetch with timeout
+  const fetchWithTimeout = async (url: string, options: RequestInit = {}): Promise<Response> => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  };
 
   useEffect(() => {
-    if (jobState && jobState.status !== "complete" && jobState.status !== "error") {
-      const interval = setInterval(async () => {
+    // Reset retry count when job state changes
+    retryCountRef.current = 0;
+
+    if (jobState && jobState.status !== "complete" && jobState.status !== "error" && jobState.status !== "cancelled") {
+      // Capture jobId to avoid stale closure issues
+      const currentJobId = jobState.id;
+      
+      const pollProgress = async () => {
+        // Abort any pending requests
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+
         try {
-          const url = `/api/progress?jobId=${encodeURIComponent(jobState.id)}`;
+          const url = `/api/progress?jobId=${encodeURIComponent(currentJobId)}`;
           console.log("Fetching progress from:", url);
-          const response = await fetch(url);
+          
+          const response = await fetchWithTimeout(url);
+          
+          // Reset retry count on successful request
+          retryCountRef.current = 0;
           
           if (response.ok) {
             const updatedState = await response.json();
             console.log("Progress update:", updatedState);
-            setJobState(updatedState);
+            
+            // Clear any previous network errors
+            setJobState((prevState) => ({
+              ...updatedState,
+              networkError: false,
+            }));
 
             if (updatedState.status === "complete" || updatedState.status === "error" || updatedState.status === "cancelled") {
               setIsProcessing(false);
-              clearInterval(interval);
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
             }
           } else {
+            // Handle HTTP errors
             const errorData = await response.json().catch(() => ({ error: response.statusText }));
             console.error("Failed to fetch progress:", response.status, errorData);
-            // If job not found after a few attempts, show error
+            
             if (response.status === 404) {
-              setJobState({
-                ...jobState,
-                status: "error",
-                error: `Job not found: ${errorData.error || "Unknown error"}`,
+              // Job not found - mark as error
+              setJobState((prevState) => {
+                if (!prevState || prevState.id !== currentJobId) return prevState;
+                return {
+                  ...prevState,
+                  status: "error",
+                  error: `Job not found: ${errorData.error || "Unknown error"}`,
+                  networkError: false,
+                };
               });
               setIsProcessing(false);
-              clearInterval(interval);
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+            } else if (response.status >= 500) {
+              // Server errors - retry with exponential backoff
+              retryCountRef.current += 1;
+              if (retryCountRef.current >= MAX_RETRIES) {
+                setJobState((prevState) => {
+                  if (!prevState || prevState.id !== currentJobId) return prevState;
+                  return {
+                    ...prevState,
+                    status: "error",
+                    error: `Server error: ${errorData.error || "Unable to connect to server. Please try again later."}`,
+                    networkError: false,
+                  };
+                });
+                setIsProcessing(false);
+                if (intervalRef.current) {
+                  clearInterval(intervalRef.current);
+                  intervalRef.current = null;
+                }
+              } else {
+                // Show temporary error but keep polling
+                setJobState((prevState) => {
+                  if (!prevState || prevState.id !== currentJobId) return prevState;
+                  return {
+                    ...prevState,
+                    message: `Connection issue (retry ${retryCountRef.current}/${MAX_RETRIES})...`,
+                  };
+                });
+              }
             }
           }
         } catch (error) {
-          console.error("Error fetching progress:", error);
-        }
-      }, 2000); // Poll every 2 seconds
+          // Handle network errors (Failed to fetch, timeout, etc.)
+          const isAborted = error instanceof Error && error.name === "AbortError";
+          const isNetworkError = error instanceof TypeError || error instanceof DOMException;
+          
+          if (isAborted) {
+            console.warn("Fetch request aborted (timeout or cancelled)");
+            return; // Don't increment retry for aborted requests
+          }
 
-      return () => clearInterval(interval);
+          if (isNetworkError) {
+            retryCountRef.current += 1;
+            console.error(`Network error fetching progress (attempt ${retryCountRef.current}/${MAX_RETRIES}):`, error);
+            
+            if (retryCountRef.current >= MAX_RETRIES) {
+              // Max retries reached - show error
+              setJobState((prevState) => {
+                if (!prevState || prevState.id !== currentJobId) return prevState;
+                return {
+                  ...prevState,
+                  status: "error",
+                  error: "Network connection failed. Please check your internet connection and try again.",
+                  networkError: true,
+                };
+              });
+              setIsProcessing(false);
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+            } else {
+              // Show temporary error but keep polling
+              setJobState((prevState) => {
+                if (!prevState || prevState.id !== currentJobId) return prevState;
+                return {
+                  ...prevState,
+                  message: `Connection issue (retry ${retryCountRef.current}/${MAX_RETRIES})...`,
+                  networkError: true,
+                };
+              });
+            }
+          } else {
+            // Unexpected error
+            console.error("Unexpected error fetching progress:", error);
+            retryCountRef.current += 1;
+            if (retryCountRef.current >= MAX_RETRIES) {
+              setJobState((prevState) => {
+                if (!prevState || prevState.id !== currentJobId) return prevState;
+                return {
+                  ...prevState,
+                  status: "error",
+                  error: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
+                  networkError: false,
+                };
+              });
+              setIsProcessing(false);
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+            }
+          }
+        }
+      };
+
+      // Initial poll
+      pollProgress();
+
+      // Set up polling interval
+      intervalRef.current = setInterval(pollProgress, POLL_INTERVAL);
+
+      // Cleanup function
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
+        retryCountRef.current = 0;
+      };
+    } else {
+      // Clean up if job is complete, error, or cancelled
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      retryCountRef.current = 0;
     }
   }, [jobState?.id, jobState?.status]); // Depend on both ID and status to properly clean up interval
 
@@ -156,6 +332,21 @@ export default function Home() {
       console.error("Error cancelling job:", error);
       alert("Failed to cancel job. Please try again.");
     }
+  };
+
+  const handleRetry = () => {
+    if (!jobState) return;
+    
+    // Reset retry count and network error state
+    retryCountRef.current = 0;
+    setJobState({
+      ...jobState,
+      status: jobState.status === "error" ? "pending" : jobState.status,
+      error: undefined,
+      networkError: false,
+      message: "Retrying connection...",
+    });
+    setIsProcessing(true);
   };
 
   return (
@@ -249,12 +440,22 @@ export default function Home() {
                 error={jobState.error}
               />
               {(jobState.status === "error" || jobState.status === "cancelled") && (
-                <button
-                  onClick={handleReset}
-                  className="w-full bg-[#F24B57] text-white py-3 px-4 rounded-lg font-semibold hover:bg-[#F24B57]/90 transition-all duration-200"
-                >
-                  Start Over
-                </button>
+                <div className="flex gap-3">
+                  {jobState.networkError && (
+                    <button
+                      onClick={handleRetry}
+                      className="flex-1 bg-[#F24B57] text-white py-3 px-4 rounded-lg font-semibold hover:bg-[#F24B57]/90 transition-all duration-200"
+                    >
+                      Retry Connection
+                    </button>
+                  )}
+                  <button
+                    onClick={handleReset}
+                    className={`${jobState.networkError ? "flex-1" : "w-full"} bg-[#E7E1E2] text-[#161010] py-3 px-4 rounded-lg font-semibold hover:bg-[#E7E1E2]/80 transition-all duration-200`}
+                  >
+                    Start Over
+                  </button>
+                </div>
               )}
             </div>
           )}
