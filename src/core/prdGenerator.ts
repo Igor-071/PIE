@@ -57,23 +57,27 @@ export async function writePrdArtifacts(
 // ============================================================================
 
 function generateScreenPurpose(screenName: string): string {
-  // Generate a reasonable purpose based on screen name
+  // Generate generic, domain-agnostic purpose based on screen name
+  // Relies primarily on AI-generated descriptions; these are minimal fallbacks only
   const nameLower = screenName.toLowerCase();
-  if (nameLower.includes('dashboard')) return 'Main dashboard displaying key metrics, patient overview, and quick actions';
-  if (nameLower.includes('login')) return 'User authentication page with login form';
-  if (nameLower.includes('patient')) {
-    if (nameLower.includes('detail')) return 'Detailed view of individual patient information, demographics, and medical history';
-    if (nameLower.includes('document')) return 'Page for viewing, uploading, and managing patient documents and medical records';
-    if (nameLower.includes('record')) return 'Comprehensive view of patient medical records, history, and treatment notes';
-    if (nameLower.includes('portal')) return 'Main patient portal dashboard with access to records, appointments, and messages';
-    if (nameLower.includes('profile')) return 'Patient profile page for viewing and editing personal information';
-    return 'Patient-related functionality';
-  }
-  if (nameLower.includes('schedule')) return 'Calendar view for scheduling, viewing, and managing appointments';
+  
+  // Generic UI patterns - no domain assumptions
+  if (nameLower.includes('dashboard')) return 'Main dashboard displaying key metrics and overview';
+  if (nameLower.includes('login') || nameLower.includes('auth')) return 'User authentication page';
+  if (nameLower.includes('home') || nameLower === 'index') return 'Main landing page';
+  if (nameLower.includes('profile')) return 'User profile page for viewing and editing information';
+  if (nameLower.includes('schedule') || nameLower.includes('calendar')) return 'Calendar view for scheduling, viewing, and managing appointments';
   if (nameLower.includes('notification')) return 'Displays list of user notifications with read/unread status';
-  if (nameLower.includes('inventory')) return 'Page for managing medical supplies, equipment inventory, and stock levels';
-  if (nameLower.includes('report')) return 'Page for generating and viewing various reports and analytics';
   if (nameLower.includes('setting')) return 'User settings page for managing preferences, notifications, and account settings';
+  if (nameLower.includes('report') || nameLower.includes('analytics')) return 'Page for generating and viewing reports and analytics';
+  if (nameLower.includes('inventory') || nameLower.includes('stock')) return 'Page for managing inventory and stock levels';
+  if (nameLower.includes('detail')) return 'Detailed view of item information';
+  if (nameLower.includes('list') || nameLower.includes('table')) return 'List view for browsing items';
+  if (nameLower.includes('form') || nameLower.includes('create') || nameLower.includes('edit')) return 'Form for creating or editing items';
+  if (nameLower.includes('modal') || nameLower.includes('dialog')) return 'Modal dialog for user interaction';
+  if (nameLower.includes('search')) return 'Search interface for finding items';
+  
+  // Completely generic fallback - no domain context
   return 'Application screen';
 }
 

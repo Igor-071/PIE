@@ -1,9 +1,11 @@
 import { promises as fs } from "fs";
-import path from "path";
+import * as path from "path";
 import { parseFile } from "./fileParser.js";
 import { validatePath } from "./pathValidator.js";
 
 export type EvidenceType = "repo_readme" | "repo_docs" | "uploaded_brief" | "package_metadata" | "code_summary" | "config_file" | "test_file" | "component_analysis" | "auth_patterns" | "code_patterns";
+
+export type EvidenceMode = "tier2" | "tier3" | "full";
 
 export interface EvidenceDocument {
   id: string;
@@ -16,12 +18,13 @@ export interface EvidenceDocument {
 export interface EvidenceCollectorOptions {
   briefText?: string | null;
   briefFiles?: string[]; // Array of file paths to parse
+  mode?: EvidenceMode; // Default: "full" for backward compatibility
 }
 
 /**
  * Collects textual evidence from the repository (README, docs, optional brief)
  * @param repoPath - Path to the repository root directory
- * @param options - Options including optional brief text
+ * @param options - Options including optional brief text and evidence mode
  * @param tier1Data - Optional Tier 1 data for generating code summary
  * @returns Promise resolving to an array of EvidenceDocument
  */
@@ -31,6 +34,11 @@ export async function collectEvidence(
   tier1Data?: any
 ): Promise<EvidenceDocument[]> {
   const documents: EvidenceDocument[] = [];
+  const mode = options.mode || "full"; // Default to "full" for backward compatibility
+  
+  // Tier 2 mode collects only business-relevant evidence
+  // Tier 3 mode collects all evidence including technical details
+  const includeTechnicalEvidence = mode === "tier3" || mode === "full";
 
   // Collect package.json metadata
   try {
@@ -137,7 +145,7 @@ export async function collectEvidence(
 
   // Generate code summary from Tier 1 data if provided
   if (tier1Data) {
-    const codeSummary = buildCodeSummary(tier1Data);
+    const codeSummary = buildCodeSummary(tier1Data, mode === "tier2");
     documents.push({
       id: "code-summary",
       type: "code_summary",
@@ -146,6 +154,9 @@ export async function collectEvidence(
     });
   }
 
+  // Collect technical evidence only for Tier 3 or full mode
+  // Tier 2 focuses on business strategy and doesn't need these technical details
+  if (includeTechnicalEvidence) {
   // Collect config files for technical assumptions
   const configFiles = await collectConfigFiles(repoPath);
   documents.push(...configFiles);
@@ -164,6 +175,7 @@ export async function collectEvidence(
   const codePatterns = await analyzeCodePatterns(repoPath, tier1Data);
   if (codePatterns) {
     documents.push(codePatterns);
+    }
   }
 
   return documents;
@@ -254,12 +266,19 @@ function buildPackageMetadataSummary(packageJson: any): string {
 
 /**
  * Builds a code summary from Tier 1 technical data
+ * @param tier1Data - Tier 1 technical data
+ * @param minimal - If true, creates a condensed summary for business strategy analysis
  */
-function buildCodeSummary(tier1Data: any): string {
+function buildCodeSummary(tier1Data: any, minimal: boolean = false): string {
   let summary = "# Technical Code Analysis\n\n";
 
   // Project overview
   summary += `## Project: ${tier1Data.projectName}\n\n`;
+  
+  // For Tier 2 (business strategy), provide only high-level overview
+  if (minimal) {
+    return buildMinimalCodeSummary(tier1Data);
+  }
 
   // Screens/Pages summary
   if (tier1Data.screens && tier1Data.screens.length > 0) {
@@ -346,6 +365,66 @@ function buildCodeSummary(tier1Data: any): string {
   if (tier1Data.aiMetadata && tier1Data.aiMetadata.stackDetected) {
     summary += `## Technology Stack\n\n`;
     summary += tier1Data.aiMetadata.stackDetected.join(", ") + "\n\n";
+  }
+
+  return summary;
+}
+
+/**
+ * Builds a minimal code summary focused on business insights
+ * Used for Tier 2 (business strategy) to reduce token count
+ */
+function buildMinimalCodeSummary(tier1Data: any): string {
+  let summary = "# Codebase Overview (High-Level)\n\n";
+  
+  summary += `**Project:** ${tier1Data.projectName}\n\n`;
+  
+  // Screens summary - just counts and key names for inferring personas
+  if (tier1Data.screens && tier1Data.screens.length > 0) {
+    summary += `**Screens/Pages:** ${tier1Data.screens.length} total\n`;
+    const screenNames = tier1Data.screens.slice(0, 15).map((s: any) => s.name);
+    summary += `Key screens: ${screenNames.join(", ")}\n`;
+    if (tier1Data.screens.length > 15) {
+      summary += `...and ${tier1Data.screens.length - 15} more\n`;
+    }
+    summary += "\n";
+  }
+  
+  // Data models - just names for domain inference
+  if (tier1Data.dataModels && tier1Data.dataModels.length > 0) {
+    summary += `**Data Models:** ${tier1Data.dataModels.length} total\n`;
+    const modelNames = tier1Data.dataModels.slice(0, 20).map((m: any) => m.name);
+    summary += `Models: ${modelNames.join(", ")}\n`;
+    if (tier1Data.dataModels.length > 20) {
+      summary += `...and ${tier1Data.dataModels.length - 20} more\n`;
+    }
+    summary += "\n";
+  }
+  
+  // API endpoints - just summary for feature inference
+  if (tier1Data.apiEndpoints && tier1Data.apiEndpoints.length > 0) {
+    summary += `**API Endpoints:** ${tier1Data.apiEndpoints.length} total\n`;
+    const methods = tier1Data.apiEndpoints.reduce((acc: any, ep: any) => {
+      acc[ep.method] = (acc[ep.method] || 0) + 1;
+      return acc;
+    }, {});
+    summary += `Methods: ${Object.entries(methods).map(([m, c]) => `${m}(${c})`).join(", ")}\n`;
+    
+    // Show a few example endpoints for feature inference
+    const exampleEndpoints = tier1Data.apiEndpoints.slice(0, 5).map((ep: any) => `${ep.method} ${ep.path}`);
+    summary += `Examples: ${exampleEndpoints.join(", ")}\n\n`;
+  }
+  
+  // Navigation - just count and key routes
+  if (tier1Data.navigation && tier1Data.navigation.length > 0) {
+    summary += `**Navigation Routes:** ${tier1Data.navigation.length} total\n`;
+    const keyRoutes = tier1Data.navigation.slice(0, 8).map((n: any) => n.path);
+    summary += `Key routes: ${keyRoutes.join(", ")}\n\n`;
+  }
+  
+  // Tech stack
+  if (tier1Data.aiMetadata && tier1Data.aiMetadata.stackDetected) {
+    summary += `**Tech Stack:** ${tier1Data.aiMetadata.stackDetected.join(", ")}\n\n`;
   }
 
   return summary;

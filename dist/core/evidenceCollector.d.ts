@@ -1,4 +1,5 @@
 export type EvidenceType = "repo_readme" | "repo_docs" | "uploaded_brief" | "package_metadata" | "code_summary" | "config_file" | "test_file" | "component_analysis" | "auth_patterns" | "code_patterns";
+export type EvidenceMode = "tier2" | "tier3" | "full";
 export interface EvidenceDocument {
     id: string;
     type: EvidenceType;
@@ -9,11 +10,12 @@ export interface EvidenceDocument {
 export interface EvidenceCollectorOptions {
     briefText?: string | null;
     briefFiles?: string[];
+    mode?: EvidenceMode;
 }
 /**
  * Collects textual evidence from the repository (README, docs, optional brief)
  * @param repoPath - Path to the repository root directory
- * @param options - Options including optional brief text
+ * @param options - Options including optional brief text and evidence mode
  * @param tier1Data - Optional Tier 1 data for generating code summary
  * @returns Promise resolving to an array of EvidenceDocument
  */

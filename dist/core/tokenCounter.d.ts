@@ -5,9 +5,10 @@
  */
 export declare function estimateTokens(text: string): number;
 /**
- * Chunks evidence documents to fit within token limits
+ * Chunks evidence documents to fit within token limits with priority-based sorting
  * @param evidence - Array of evidence documents
  * @param maxTokens - Maximum tokens allowed (default: MAX_EVIDENCE_TOKENS)
+ * @param tier2Mode - If true, uses more aggressive limits for business strategy analysis
  * @returns Chunked evidence that fits within token limit
  */
 export declare function chunkEvidence(evidence: Array<{
@@ -15,7 +16,7 @@ export declare function chunkEvidence(evidence: Array<{
     title: string;
     content: string;
     type: string;
-}>, maxTokens?: number): Array<{
+}>, maxTokens?: number, tier2Mode?: boolean): Array<{
     id: string;
     title: string;
     content: string;

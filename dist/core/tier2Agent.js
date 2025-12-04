@@ -2,6 +2,62 @@ import OpenAI from "openai";
 import { getConfig } from "../config.js";
 import { chunkEvidence, estimateTokens } from "./tokenCounter.js";
 import { retryWithBackoff } from "./retry.js";
+// Max evidence tokens constant (not exported from tokenCounter, so define here)
+const MAX_EVIDENCE_TOKENS = 110000;
+/**
+ * Creates a summarized version of base JSON for Tier 2 analysis
+ * Tier 2 only needs high-level information for business strategy,
+ * not the full technical details that add ~13k tokens
+ */
+function summarizeBaseJsonForTier2(baseJson) {
+    // Handle dataModel which can be either DataModel (Record) or EnhancedDataModel (object with entities)
+    let dataModelNames = [];
+    let dataModelCount = 0;
+    if (baseJson.dataModel) {
+        if ('entities' in baseJson.dataModel) {
+            // EnhancedDataModel
+            dataModelNames = Object.keys(baseJson.dataModel.entities || {}).slice(0, 15);
+            dataModelCount = Object.keys(baseJson.dataModel.entities || {}).length;
+        }
+        else {
+            // DataModel
+            dataModelNames = Object.keys(baseJson.dataModel).slice(0, 15);
+            dataModelCount = Object.keys(baseJson.dataModel).length;
+        }
+    }
+    return {
+        project: baseJson.project,
+        summary: {
+            screens: {
+                count: baseJson.screens?.length || 0,
+                names: baseJson.screens?.slice(0, 15).map(s => s.name) || [],
+                paths: baseJson.screens?.slice(0, 10).map(s => s.path).filter(Boolean) || [],
+            },
+            navigation: {
+                count: baseJson.navigation?.length || 0,
+                paths: baseJson.navigation?.slice(0, 10).map(n => n.path) || [],
+            },
+            api: {
+                count: baseJson.api?.length || 0,
+                endpoints: baseJson.api?.slice(0, 15).map(a => `${a.method} ${a.endpoint}`) || [],
+            },
+            dataModel: {
+                count: dataModelCount,
+                models: dataModelNames,
+            },
+            state: {
+                hasGlobalState: !!baseJson.state?.global,
+                globalStateKeys: baseJson.state?.global ? Object.keys(baseJson.state.global).slice(0, 10) : [],
+            },
+            events: {
+                count: baseJson.events?.length || 0,
+                types: [...new Set(baseJson.events?.map(e => e.type))].slice(0, 5) || [],
+            },
+        },
+        // Include AI metadata for tech stack info
+        aiMetadata: baseJson.aiMetadata,
+    };
+}
 /**
  * Runs the Tier 2 AI agent to fill strategic fields in the PRD JSON
  * @param baseJson - Initial PRD JSON with Tier 1 data populated
@@ -10,6 +66,34 @@ import { retryWithBackoff } from "./retry.js";
  * @returns Promise resolving to Tier2Result with updated JSON and questions
  */
 export async function runTier2Agent(baseJson, evidence, options = {}) {
+    // Try with full evidence first, then retry with reduced evidence on timeout
+    try {
+        return await runTier2AgentInternal(baseJson, evidence, options, false);
+    }
+    catch (error) {
+        // Check if it's a timeout error
+        if (error instanceof Error && error.message.toLowerCase().includes("timeout")) {
+            console.warn("[Tier2Agent] Timeout with full evidence, retrying with 50% reduced evidence...");
+            // Retry with reduced evidence (take only first 50% of documents)
+            const reducedEvidence = evidence.slice(0, Math.ceil(evidence.length * 0.5));
+            console.log(`[Tier2Agent] Reduced evidence from ${evidence.length} to ${reducedEvidence.length} documents`);
+            try {
+                return await runTier2AgentInternal(baseJson, reducedEvidence, options, true);
+            }
+            catch (retryError) {
+                // If retry also fails, throw the original error with context
+                throw new Error(`Tier 2 agent failed even with reduced evidence: ${error.message}`);
+            }
+        }
+        // If not a timeout error, rethrow
+        throw error;
+    }
+}
+/**
+ * Internal implementation of Tier 2 agent
+ * @param isRetry - Whether this is a retry with reduced evidence
+ */
+async function runTier2AgentInternal(baseJson, evidence, options = {}, isRetry = false) {
     const config = getConfig();
     // Set timeout to 4.5 minutes (270000ms) to stay under Next.js maxDuration of 5 minutes
     const API_TIMEOUT_MS = 270000;
@@ -134,10 +218,11 @@ CRITICAL OUTPUT REQUIREMENTS:
         }
     };
     // Report progress when starting preparation
-    updateProgress(50, "Preparing AI analysis...");
-    // Chunk evidence to fit within token limits
+    const progressPrefix = isRetry ? "[Retry with reduced evidence] " : "";
+    updateProgress(50, `${progressPrefix}Preparing AI analysis...`);
+    // Chunk evidence to fit within token limits (Tier 2 mode for business strategy)
     updateProgress(51, "Chunking evidence documents...");
-    const chunkedEvidence = chunkEvidence(evidence);
+    const chunkedEvidence = chunkEvidence(evidence, MAX_EVIDENCE_TOKENS, true);
     // Build user message with context
     updateProgress(52, "Building analysis context...");
     const evidenceSummary = chunkedEvidence.map((doc) => ({
@@ -146,14 +231,22 @@ CRITICAL OUTPUT REQUIREMENTS:
         title: doc.title,
         contentPreview: doc.content.substring(0, 500) + (doc.content.length > 500 ? "..." : ""),
     }));
-    const baseJsonString = JSON.stringify(baseJson, null, 2);
+    // Create summarized version of base JSON for Tier 2 (reduces from ~13k to ~1.5k tokens)
+    const baseJsonSummary = summarizeBaseJsonForTier2(baseJson);
+    const baseJsonString = JSON.stringify(baseJsonSummary, null, 2);
     const baseJsonTokens = estimateTokens(baseJsonString);
     // Estimate total tokens
     const evidenceContent = chunkedEvidence.map((doc) => `\n--- ${doc.title} (${doc.type}) ---\n${doc.content}`).join("\n\n");
     const evidenceTokens = estimateTokens(evidenceContent);
     totalEstimatedTokens = baseJsonTokens + evidenceTokens + estimateTokens(systemPrompt);
     // Log token estimates for debugging
-    console.log(`[Tier2Agent] Token estimates: Base JSON=${baseJsonTokens}, Evidence=${evidenceTokens}, System=${estimateTokens(systemPrompt)}, Total=${totalEstimatedTokens}`);
+    const dataModelCount = baseJson.dataModel
+        ? ('entities' in baseJson.dataModel
+            ? Object.keys(baseJson.dataModel.entities || {}).length
+            : Object.keys(baseJson.dataModel).length)
+        : 0;
+    console.log(`[Tier2Agent] Token estimates: Base JSON Summary=${baseJsonTokens}, Evidence=${evidenceTokens}, System=${estimateTokens(systemPrompt)}, Total=${totalEstimatedTokens}`);
+    console.log(`[Tier2Agent] Using summarized base JSON (screens: ${baseJson.screens?.length || 0}, APIs: ${baseJson.api?.length || 0}, models: ${dataModelCount})`);
     if (totalEstimatedTokens > 100000) {
         console.warn(`[Tier2Agent] Warning: Estimated token count (${totalEstimatedTokens}) is high. This may cause timeouts.`);
     }
@@ -168,7 +261,10 @@ CRITICAL OUTPUT REQUIREMENTS:
     updateProgress(53, "Preparing AI prompt...");
     const userMessage = `# Task: Generate Comprehensive PRD from Codebase Analysis
 
-## Current PRD JSON (Technical Data Extracted)
+## Technical Summary (High-Level Overview)
+The following is a SUMMARY of technical data extracted from the codebase.
+You'll receive detailed technical specs in Tier 3 - focus here on business strategy.
+
 ${baseJsonString}
 
 ## Evidence Documents (${chunkedEvidence.length})
@@ -244,7 +340,7 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
                         { role: "user", content: userMessage },
                     ],
                     response_format: { type: "json_object" },
-                    temperature: 0.8, // Higher for creative strategic content
+                    temperature: 0.6, // Balanced for creative strategic content with faster response
                 });
                 const elapsed = Date.now() - apiCallStartTime;
                 console.log(`[Tier2Agent] API call completed successfully in ${elapsed}ms`);
