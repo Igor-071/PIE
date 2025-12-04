@@ -295,6 +295,7 @@ async function processJob(
         projectName: tier1.projectName,
       });
       markdownFilename = artifacts.markdownFilename;
+      console.log(`[generate] PRD artifacts written successfully. Markdown filename: ${markdownFilename}`);
 
       // Clean up uploaded files
       try {
@@ -317,8 +318,8 @@ async function processJob(
       }
     }
 
-    // Mark as complete (only if not cancelled and outputDir was set)
-    if (!isJobCancelled(jobId) && outputDir) {
+    // Mark as complete (only if not cancelled and all required fields are set)
+    if (!isJobCancelled(jobId) && outputDir && markdownFilename) {
       updateJob(jobId, {
         status: "complete",
         progress: 100,
@@ -326,6 +327,14 @@ async function processJob(
         outputDir,
         projectName: projectName || "unknown",
         markdownFilename,
+      });
+    } else if (!isJobCancelled(jobId) && !markdownFilename) {
+      // If we got here without markdownFilename, something went wrong
+      updateJob(jobId, {
+        status: "error",
+        progress: 0,
+        message: "Processing failed",
+        error: "Failed to generate PRD document. The process completed but no output file was created.",
       });
     }
   } catch (error) {
@@ -354,6 +363,10 @@ async function processJob(
         progress: 0,
         message: userFriendlyMessage,
         error: errorMessage,
+        // Clear any partial data that might have been set
+        outputDir: undefined,
+        projectName: undefined,
+        markdownFilename: undefined,
       });
     }
 
