@@ -304,11 +304,13 @@ async function processJob(
         return;
       }
 
+      // Collect evidence in Tier 2 mode (business-focused, excludes technical details)
       const evidence = await collectEvidence(unzippedPath!, {
         briefText: briefText || null,
         briefFiles: briefFilePaths.length > 0 ? briefFilePaths : undefined,
+        mode: "tier2", // Use Tier 2 mode for business strategy analysis
       });
-      addStep(jobId, `Collected ${evidence.length} evidence document${evidence.length !== 1 ? 's' : ''}`, "completed");
+      addStep(jobId, `Collected ${evidence.length} evidence document${evidence.length !== 1 ? 's' : ''} (business-focused)`, "completed");
 
       // Step 4: Build initial PRD JSON
       addStep(jobId, "Building initial PRD structure...", "active");
