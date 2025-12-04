@@ -116,9 +116,25 @@ CRITICAL OUTPUT REQUIREMENTS:
 3. Only ADD/UPDATE the strategic fields: brandFoundations, targetAudience, problemDefinition, solutionOverview, leanCanvas, etc.
 4. DO NOT remove or omit any fields from the input JSON
 5. Your output should be the FULL merged object, not just the strategic fields`;
+    // Helper function to safely call progress callback
+    const updateProgress = (progress, message) => {
+        try {
+            if (options.onProgress) {
+                options.onProgress(progress, message);
+            }
+        }
+        catch (error) {
+            // Don't let progress callback errors break the process
+            console.warn("Progress callback error:", error);
+        }
+    };
+    // Report progress when starting preparation
+    updateProgress(50, "Preparing AI analysis...");
     // Chunk evidence to fit within token limits
+    updateProgress(51, "Chunking evidence documents...");
     const chunkedEvidence = chunkEvidence(evidence);
     // Build user message with context
+    updateProgress(52, "Building analysis context...");
     const evidenceSummary = chunkedEvidence.map((doc) => ({
         id: doc.id,
         type: doc.type,
@@ -139,6 +155,7 @@ CRITICAL OUTPUT REQUIREMENTS:
     const navCount = baseJson.navigation?.length || 0;
     const apiCount = baseJson.api?.length || 0;
     const screenNames = baseJson.screens?.slice(0, 10).map(s => s.name).join(", ") || "None";
+    updateProgress(53, "Preparing AI prompt...");
     const userMessage = `# Task: Generate Comprehensive PRD from Codebase Analysis
 
 ## Current PRD JSON (Technical Data Extracted)
@@ -175,7 +192,27 @@ Based on screen names, data models, and patterns:
    - Jobs to be done (tasks they complete)
 
 Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions} questions for missing information.`;
+    // Declare progress interval outside try block for cleanup in catch
+    let progressInterval = null;
     try {
+        // Report progress when starting the API call
+        updateProgress(53, "Analyzing business strategy and target audience...");
+        // Set up time-based progress estimation during API call
+        // Estimate API call will take 30-60 seconds, progress from 53% to 56%
+        const progressStartTime = Date.now();
+        const estimatedDurationMs = 45000; // 45 seconds average
+        const progressStartPercent = 53;
+        const progressEndPercent = 56;
+        const progressRange = progressEndPercent - progressStartPercent;
+        // Start progress estimation interval (update every 2 seconds)
+        if (options.onProgress) {
+            progressInterval = setInterval(() => {
+                const elapsed = Date.now() - progressStartTime;
+                const progressRatio = Math.min(elapsed / estimatedDurationMs, 1); // Cap at 1.0
+                const currentProgress = Math.round(progressStartPercent + progressRatio * progressRange);
+                updateProgress(currentProgress, "Analyzing business strategy and target audience...");
+            }, 2000); // Update every 2 seconds
+        }
         const completion = await retryWithBackoff(async () => {
             return await openai.chat.completions.create({
                 model,
@@ -193,6 +230,13 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
             backoffMultiplier: 2,
             retryableErrors: ["429", "rate_limit", "timeout", "ECONNRESET", "ETIMEDOUT"],
         });
+        // Clear progress interval when API call completes
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        // Report progress after API call completes
+        updateProgress(57, "Processing strategic insights...");
         const responseContent = completion.choices[0]?.message?.content;
         if (!responseContent) {
             throw new Error("Empty response from OpenAI API");
@@ -228,12 +272,19 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
             events: baseJson.events,
             aiMetadata: baseJson.aiMetadata,
         };
+        // Report progress when merging is complete
+        updateProgress(60, "Strategic analysis complete");
         return {
             updatedJson: mergedJson,
             questionsForClient: parsedResponse.questionsForClient,
         };
     }
     catch (error) {
+        // Ensure progress interval is cleared on error
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
         if (error instanceof Error) {
             throw new Error(`Tier 2 agent failed: ${error.message}`);
         }

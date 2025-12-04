@@ -17,6 +17,7 @@ export interface Tier3AgentOptions {
   model?: string;
   temperature?: number;
   skipSections?: string[]; // Optional: skip certain sections
+  onProgress?: (progress: number, message: string) => void; // Progress callback: progress (0-100), message
 }
 
 /**
@@ -72,10 +73,32 @@ export async function runTier3Agent(
 
   console.log(`Executing ${promptsToExecute.length} Tier 3 prompts...`);
 
+  // Helper function to convert camelCase prompt names to readable format
+  const formatPromptName = (name: string): string => {
+    // Convert camelCase to Title Case with spaces
+    return name
+      .replace(/([A-Z])/g, " $1")
+      .replace(/^./, (str) => str.toUpperCase())
+      .trim();
+  };
+
+  // Create progress callback that maps prompt progress (0-1) to overall Tier 3 progress (70-90%)
+  const promptProgressCallback = options.onProgress
+    ? (completed: number, total: number, currentPromptName: string) => {
+        // Map prompt progress to Tier 3 progress range (70% to 90%)
+        const promptProgress = completed / total;
+        const tier3Progress = 70 + promptProgress * 20; // 70% to 90%
+        const formattedName = formatPromptName(currentPromptName);
+        const message = `Generating ${formattedName} (${completed}/${total})...`;
+        options.onProgress!(Math.round(tier3Progress), message);
+      }
+    : undefined;
+
   // Execute all prompts
   const results = await executePrompts(promptsToExecute, context, {
     model: options.model,
     temperature: options.temperature,
+    onProgress: promptProgressCallback,
   });
 
   // Merge results into PRD JSON

@@ -7,6 +7,7 @@ export interface Tier2Result {
 export interface Tier2AgentOptions {
     maxQuestions?: number;
     model?: string;
+    onProgress?: (progress: number, message: string) => void;
 }
 /**
  * Runs the Tier 2 AI agent to fill strategic fields in the PRD JSON

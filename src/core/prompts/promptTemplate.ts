@@ -85,17 +85,32 @@ export async function executePrompt(
 export async function executePrompts(
   prompts: SectionPrompt[],
   context: PromptContext,
-  options: { model?: string; temperature?: number } = {}
+  options: { 
+    model?: string; 
+    temperature?: number;
+    onProgress?: (completed: number, total: number, currentPromptName: string) => void;
+  } = {}
 ): Promise<Record<string, PromptResult>> {
   const results: Record<string, PromptResult> = {};
+  const total = prompts.length;
 
-  for (const prompt of prompts) {
+  for (let i = 0; i < prompts.length; i++) {
+    const prompt = prompts[i];
     try {
       console.log(`Executing prompt: ${prompt.name}...`);
       results[prompt.name] = await executePrompt(prompt, context, options);
+      
+      // Call progress callback after each prompt completes
+      if (options.onProgress) {
+        options.onProgress(i + 1, total, prompt.name);
+      }
     } catch (error) {
       console.error(`Failed to execute prompt ${prompt.name}:`, error);
       // Continue with other prompts even if one fails
+      // Still call progress callback to indicate we attempted this prompt
+      if (options.onProgress) {
+        options.onProgress(i + 1, total, prompt.name);
+      }
     }
   }
 

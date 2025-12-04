@@ -545,11 +545,9 @@ export interface Dependencies {
 
 export interface AccessMatrix {
   feature: string;
-  superAdmin?: string;
-  medicalProvider?: string;
-  reception?: string;
-  patient?: string;
-  [key: string]: string | undefined; // Allow custom roles
+  // Roles are project-specific and defined dynamically via the index signature
+  // Examples: admin, user, viewer, superAdmin, medicalProvider, patient, reception, etc.
+  [roleId: string]: string | undefined; // Dynamic role permissions (e.g., "admin": "CRUD", "user": "Read/Update")
 }
 
 export interface RoleDefinition {
@@ -750,11 +748,9 @@ export interface EnhancedDependencies extends Dependencies {
 // Enhanced Access Matrix
 export interface EnhancedAccessMatrix {
   feature: string;
-  superAdmin?: string;
-  medicalProvider?: string;
-  reception?: string;
-  patient?: string;
-  [key: string]: string | undefined | Record<string, {
+  // Roles are project-specific and defined dynamically via the index signature
+  // Examples: admin, user, viewer, superAdmin, medicalProvider, patient, reception, etc.
+  [roleId: string]: string | undefined | Record<string, {
     view?: boolean;
     create?: boolean;
     edit?: boolean;

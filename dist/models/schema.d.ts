@@ -372,11 +372,7 @@ export interface Dependencies {
 }
 export interface AccessMatrix {
     feature: string;
-    superAdmin?: string;
-    medicalProvider?: string;
-    reception?: string;
-    patient?: string;
-    [key: string]: string | undefined;
+    [roleId: string]: string | undefined;
 }
 export interface RoleDefinition {
     roles?: Array<{
@@ -520,11 +516,7 @@ export interface EnhancedDependencies extends Dependencies {
 }
 export interface EnhancedAccessMatrix {
     feature: string;
-    superAdmin?: string;
-    medicalProvider?: string;
-    reception?: string;
-    patient?: string;
-    [key: string]: string | undefined | Record<string, {
+    [roleId: string]: string | undefined | Record<string, {
         view?: boolean;
         create?: boolean;
         edit?: boolean;

@@ -6,9 +6,11 @@ export const roleDefinitionPrompt: SectionPrompt = {
   systemPrompt: `You are an access control expert defining roles and permissions.
 
 Analyze screens, API endpoints, and user patterns to infer:
-- User roles (Admin, Provider, Patient, etc.)
+- User roles (Admin, User, Viewer, etc.)
 - Access matrix showing what each role can do
 - Feature-level permissions
+
+IMPORTANT: Only generate roles that are actually detected in the codebase. Do not invent roles based on examples. If no role patterns are detected, either skip role definition or define minimal generic roles (e.g., Admin, User) only if they make sense for this application.
 
 Return JSON:
 {
@@ -18,11 +20,10 @@ Return JSON:
     ],
     "accessMatrix": [
       {
-        "feature": "Patient Registry",
-        "superAdmin": "CRUD",
-        "medicalProvider": "CRUD",
-        "reception": "View/Edit Basic",
-        "patient": "Own Profile Only"
+        "feature": "General",
+        "admin": "CRUD",
+        "user": "Read/Update",
+        "viewer": "Read Only"
       }
     ]
   },
@@ -53,19 +54,39 @@ Return JSON:
       }
     });
     
-    return `# Define Role-Based Access Control
+    // Check if any roles were actually detected
+    const hasDetectedRoles = Object.keys(roleScreens).length > 0 || rbacEvidence.length > 0;
+    
+    // Detect if this is a healthcare domain based on screens/evidence
+    const isHealthcareDomain = 
+      screens.some(s => s.name.toLowerCase().includes("patient") || 
+                       s.name.toLowerCase().includes("provider") ||
+                       s.name.toLowerCase().includes("medical") ||
+                       s.name.toLowerCase().includes("clinic")) ||
+      rbacEvidence.some(e => e.content.toLowerCase().includes("patient") || 
+                            e.content.toLowerCase().includes("medical"));
+    
+    let prompt = `# Define Role-Based Access Control
 
 ## Screens by Role Pattern
-${Object.entries(roleScreens).map(([role, screens]) => `### ${role}\n${screens.join("\n- ")}`).join("\n\n")}
+${Object.keys(roleScreens).length > 0 
+  ? Object.entries(roleScreens).map(([role, screens]) => `### ${role}\n${screens.join("\n- ")}`).join("\n\n")
+  : "No role-specific screens detected."}
 
 ## RBAC Patterns Detected
-${rbacEvidence.map(e => e.content.substring(0, 1000)).join("\n\n")}
+${rbacEvidence.length > 0 
+  ? rbacEvidence.map(e => e.content.substring(0, 1000)).join("\n\n")
+  : "No RBAC patterns detected in code."}
 
 ## Features
 ${groupScreensByFeature(screens).map(f => `- ${f.name}`).join("\n")}
 
 ## Task
-Define roles and create access matrix showing permissions per feature.`;
+${hasDetectedRoles 
+  ? `Define roles and create access matrix showing permissions per feature based on the detected patterns above.${isHealthcareDomain ? "" : " IMPORTANT: Do NOT use healthcare-specific roles (Patient, Medical Provider, Receptionist) unless healthcare patterns are clearly present in the screens/evidence above."}`
+  : "If no clear role patterns are detected, either skip role definition or define minimal generic roles (e.g., Admin, User) only if they make sense for this application. Do NOT invent healthcare-specific roles unless healthcare patterns are actually present."}`;
+    
+    return prompt;
   },
 
   parseResponse: (response: string): PromptResult => {

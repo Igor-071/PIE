@@ -316,6 +316,15 @@ async function processJob(
 
       const tier2Result = await runTier2Agent(baseJson, evidence, {
         maxQuestions: 7,
+        onProgress: (progress: number, message: string) => {
+          if (!isJobCancelled(jobId)) {
+            updateJob(jobId, {
+              status: "tier2",
+              progress,
+              message,
+            });
+          }
+        },
       });
 
       // Step 6: Run Tier 3 agent
@@ -329,7 +338,17 @@ async function processJob(
         return;
       }
 
-      const tier3Result = await runTier3Agent(tier2Result.updatedJson, evidence, tier1);
+      const tier3Result = await runTier3Agent(tier2Result.updatedJson, evidence, tier1, {
+        onProgress: (progress: number, message: string) => {
+          if (!isJobCancelled(jobId)) {
+            updateJob(jobId, {
+              status: "tier3",
+              progress,
+              message,
+            });
+          }
+        },
+      });
 
       // Step 7: Merge questions from Tier 2 and Tier 3
       const allQuestions = {
