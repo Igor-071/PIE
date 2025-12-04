@@ -26,12 +26,18 @@ npm run build
 
 ### Environment Setup
 
-Create a `.env` file in the root directory:
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
 
-```
-OPENAI_API_KEY=your_api_key_here
-OPENAI_MODEL=gpt-4o-mini
-```
+2. Edit `.env` and add your OpenAI API key:
+   ```
+   OPENAI_API_KEY=sk-your_actual_api_key_here
+   OPENAI_MODEL=gpt-4-turbo
+   ```
+
+   Get your API key from: https://platform.openai.com/api-keys
 
 ## Usage
 
