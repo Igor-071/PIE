@@ -36,8 +36,11 @@ export async function executePrompt(
   options: { model?: string; temperature?: number } = {}
 ): Promise<PromptResult> {
   const config = getConfig();
+  // Set timeout to 4.5 minutes (270000ms) to stay under Next.js maxDuration of 5 minutes
+  const API_TIMEOUT_MS = 270000;
   const openai = new OpenAI({
     apiKey: config.openAiApiKey,
+    timeout: API_TIMEOUT_MS,
   });
 
   const model = options.model ?? config.model;
@@ -46,26 +49,34 @@ export async function executePrompt(
   const userMessage = prompt.generateUserPrompt(context);
 
   try {
-    const completion = await retryWithBackoff(
-      async () => {
-        return await openai.chat.completions.create({
-          model,
-          messages: [
-            { role: "system", content: prompt.systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          response_format: { type: "json_object" },
-          temperature,
-        });
-      },
-      {
-        maxRetries: 3,
-        initialDelayMs: 1000,
-        maxDelayMs: 30000,
-        backoffMultiplier: 2,
-        retryableErrors: ["429", "rate_limit", "timeout", "ECONNRESET", "ETIMEDOUT"],
-      }
-    );
+    // Wrap API call with explicit timeout to prevent hanging
+    const completion = await Promise.race([
+      retryWithBackoff(
+        async () => {
+          return await openai.chat.completions.create({
+            model,
+            messages: [
+              { role: "system", content: prompt.systemPrompt },
+              { role: "user", content: userMessage },
+            ],
+            response_format: { type: "json_object" },
+            temperature,
+          });
+        },
+        {
+          maxRetries: 3,
+          initialDelayMs: 1000,
+          maxDelayMs: 30000,
+          backoffMultiplier: 2,
+          retryableErrors: ["429", "rate_limit", "timeout", "ECONNRESET", "ETIMEDOUT", "Request timed out"],
+        }
+      ),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Request timed out after ${API_TIMEOUT_MS / 1000} seconds for prompt ${prompt.name}. The analysis may be too large.`));
+        }, API_TIMEOUT_MS);
+      }),
+    ]);
 
     const responseContent = completion.choices[0]?.message?.content;
     if (!responseContent) {
@@ -75,6 +86,14 @@ export async function executePrompt(
     const parsed = JSON.parse(responseContent);
     return prompt.parseResponse(JSON.stringify(parsed));
   } catch (error) {
+    // Provide more specific error messages for timeout errors
+    if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+      if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
+        console.error(`[PromptTemplate] Timeout error for ${prompt.name}: ${error.message}`);
+        throw new Error(`Prompt execution failed for ${prompt.name}: Request timed out. The analysis may be too large. Consider reducing evidence size or using a faster model.`);
+      }
+    }
     throw new Error(`Prompt execution failed for ${prompt.name}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

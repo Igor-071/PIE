@@ -33,9 +33,15 @@ export async function runTier2Agent(
   options: Tier2AgentOptions = {}
 ): Promise<Tier2Result> {
   const config = getConfig();
+  // Set timeout to 4.5 minutes (270000ms) to stay under Next.js maxDuration of 5 minutes
+  const API_TIMEOUT_MS = 270000;
   const openai = new OpenAI({
     apiKey: config.openAiApiKey,
+    // Don't set timeout here - we'll handle it with Promise.race to have better control
   });
+  
+  // Declare token count variable for error reporting
+  let totalEstimatedTokens = 0;
 
   const maxQuestions = options.maxQuestions ?? 7;
   const model = options.model ?? config.model;
@@ -177,10 +183,17 @@ CRITICAL OUTPUT REQUIREMENTS:
     `\n--- ${doc.title} (${doc.type}) ---\n${doc.content}`
   ).join("\n\n");
   const evidenceTokens = estimateTokens(evidenceContent);
-  const totalEstimatedTokens = baseJsonTokens + evidenceTokens + estimateTokens(systemPrompt);
+  totalEstimatedTokens = baseJsonTokens + evidenceTokens + estimateTokens(systemPrompt);
+  
+  // Log token estimates for debugging
+  console.log(`[Tier2Agent] Token estimates: Base JSON=${baseJsonTokens}, Evidence=${evidenceTokens}, System=${estimateTokens(systemPrompt)}, Total=${totalEstimatedTokens}`);
   
   if (totalEstimatedTokens > 100000) {
-    console.warn(`Warning: Estimated token count (${totalEstimatedTokens}) is high.`);
+    console.warn(`[Tier2Agent] Warning: Estimated token count (${totalEstimatedTokens}) is high. This may cause timeouts.`);
+  }
+  
+  if (totalEstimatedTokens > 200000) {
+    console.error(`[Tier2Agent] Error: Estimated token count (${totalEstimatedTokens}) is extremely high. Request will likely timeout.`);
   }
 
   // Extract key insights for guidance
@@ -227,8 +240,9 @@ Based on screen names, data models, and patterns:
 
 Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions} questions for missing information.`;
 
-  // Declare progress interval outside try block for cleanup in catch
+  // Declare progress interval and timeout outside try block for cleanup in catch
   let progressInterval: NodeJS.Timeout | null = null;
+  let timeoutId: NodeJS.Timeout | null = null;
 
   try {
     // Report progress when starting the API call
@@ -252,31 +266,59 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
       }, 2000); // Update every 2 seconds
     }
 
-    const completion = await retryWithBackoff(
-      async () => {
-        return await openai.chat.completions.create({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.8, // Higher for creative strategic content
-        });
-      },
-      {
-        maxRetries: 3,
-        initialDelayMs: 1000,
-        maxDelayMs: 30000,
-        backoffMultiplier: 2,
-        retryableErrors: ["429", "rate_limit", "timeout", "ECONNRESET", "ETIMEDOUT"],
-      }
-    );
+    // Wrap API call with explicit timeout to prevent hanging
+    console.log(`[Tier2Agent] Starting API call with ${API_TIMEOUT_MS / 1000}s timeout...`);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const timeoutError = new Error(`Request timed out after ${API_TIMEOUT_MS / 1000} seconds. The analysis may be too large (estimated ${totalEstimatedTokens} tokens). Consider reducing evidence size or using a faster model.`);
+        console.error(`[Tier2Agent] Timeout fired: ${timeoutError.message}`);
+        reject(timeoutError);
+      }, API_TIMEOUT_MS);
+    });
 
-    // Clear progress interval when API call completes
+    const apiCallStartTime = Date.now();
+    const completion = await Promise.race([
+      retryWithBackoff(
+        async () => {
+          console.log(`[Tier2Agent] Making OpenAI API call...`);
+          const result = await openai.chat.completions.create({
+            model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userMessage },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.8, // Higher for creative strategic content
+          });
+          const elapsed = Date.now() - apiCallStartTime;
+          console.log(`[Tier2Agent] API call completed successfully in ${elapsed}ms`);
+          return result;
+        },
+        {
+          maxRetries: 3,
+          initialDelayMs: 1000,
+          maxDelayMs: 30000,
+          backoffMultiplier: 2,
+          retryableErrors: ["429", "rate_limit", "timeout", "ECONNRESET", "ETIMEDOUT", "Request timed out"],
+        }
+      ).finally(() => {
+        // Clean up timeout if API call completes (success or failure)
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      }),
+      timeoutPromise,
+    ]);
+
+    // Clear progress interval and timeout when API call completes
     if (progressInterval) {
       clearInterval(progressInterval);
       progressInterval = null;
+    }
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
     }
 
     // Report progress after API call completes
@@ -336,13 +378,24 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
       questionsForClient: parsedResponse.questionsForClient,
     };
   } catch (error) {
-    // Ensure progress interval is cleared on error
+    // Ensure progress interval and timeout are cleared on error
     if (progressInterval) {
       clearInterval(progressInterval);
       progressInterval = null;
     }
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
     
+    // Provide more specific error messages for timeout errors
     if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+      if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
+        console.error(`[Tier2Agent] Timeout error: ${error.message}`);
+        console.error(`[Tier2Agent] Estimated tokens: ${totalEstimatedTokens}`);
+        throw new Error(`Tier 2 agent failed: Request timed out. The analysis may be too large (estimated ${totalEstimatedTokens} tokens). Consider reducing evidence size or using a faster model.`);
+      }
       throw new Error(`Tier 2 agent failed: ${error.message}`);
     }
     throw new Error(`Tier 2 agent failed: ${String(error)}`);
