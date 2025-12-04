@@ -417,6 +417,17 @@ export interface PrdJson {
   solutionOverview?: SolutionOverview;
   customerProfiles?: CustomerProfiles;
   leanCanvas?: LeanCanvas;
+  goalsAndSuccessCriteria?: GoalsAndSuccessCriteria;
+  mvpScope?: MvpScope;
+  assumptions?: Assumptions;
+  dependencies?: Dependencies;
+  roleDefinition?: RoleDefinition;
+  productRequirements?: ProductRequirement[];
+  criticalUserFlows?: CriticalUserFlow[];
+  technicalRequirements?: TechnicalRequirement[];
+  nonFunctionalRequirements?: NonFunctionalRequirement[];
+  riskManagement?: RiskManagement;
+  openQuestions?: OpenQuestions;
   screens?: Screen[];
   components?: Component[];
   navigation?: Navigation[];
@@ -444,4 +455,197 @@ export interface ClientQuestion {
 export interface QuestionsForClient {
   questions: ClientQuestion[];
   generatedAt: string;
+}
+
+// ============================================================================
+// GOALS & SUCCESS CRITERIA
+// ============================================================================
+
+export interface SuccessMetric {
+  name: string;
+  description: string;
+  target?: string;
+  measurementMethod?: string;
+}
+
+export interface GoalsAndSuccessCriteria {
+  primaryGoals?: string[];
+  successMetrics?: SuccessMetric[];
+  kpis?: string[];
+}
+
+// ============================================================================
+// MVP SCOPE
+// ============================================================================
+
+export interface MvpFeature {
+  name: string;
+  description: string;
+  priority: "high" | "medium" | "low";
+  screens?: string[];
+  dependencies?: string[];
+}
+
+export interface MvpScope {
+  phase?: string;
+  features?: MvpFeature[];
+  outOfScope?: string[];
+}
+
+// ============================================================================
+// ASSUMPTIONS
+// ============================================================================
+
+export interface Assumptions {
+  technical?: string[];
+  operational?: string[];
+  financial?: string[];
+  legal?: string[];
+}
+
+// ============================================================================
+// DEPENDENCIES
+// ============================================================================
+
+export interface ServiceDependency {
+  name: string;
+  description: string;
+  impact?: string;
+}
+
+export interface OperationalDependency {
+  description: string;
+  requirement?: string;
+}
+
+export interface ContentDependency {
+  description: string;
+  source?: string;
+}
+
+export interface Dependencies {
+  service?: ServiceDependency[];
+  operational?: OperationalDependency[];
+  content?: ContentDependency[];
+}
+
+// ============================================================================
+// ROLE DEFINITION & ACCESS MODEL
+// ============================================================================
+
+export interface AccessMatrix {
+  feature: string;
+  superAdmin?: string;
+  medicalProvider?: string;
+  reception?: string;
+  patient?: string;
+  [key: string]: string | undefined; // Allow custom roles
+}
+
+export interface RoleDefinition {
+  roles?: Array<{
+    id: string;
+    name: string;
+    description: string;
+  }>;
+  accessMatrix?: AccessMatrix[];
+}
+
+// ============================================================================
+// PRODUCT REQUIREMENTS & ACCEPTANCE CRITERIA
+// ============================================================================
+
+export interface AcceptanceCriteria {
+  id: string;
+  description: string;
+  testable?: boolean;
+}
+
+export interface ProductRequirement {
+  module: string;
+  objective: string;
+  features: Array<{
+    name: string;
+    description: string;
+    acceptanceCriteria: AcceptanceCriteria[];
+  }>;
+}
+
+// ============================================================================
+// USER FLOWS (Enhanced)
+// ============================================================================
+
+export interface UserFlowStep {
+  stepNumber: number;
+  action: string;
+  screen?: string;
+  systemResponse?: string;
+  painPoint?: string;
+}
+
+export interface CriticalUserFlow {
+  id: string;
+  name: string;
+  role: string;
+  goal: string;
+  steps: UserFlowStep[];
+}
+
+// ============================================================================
+// RISK MANAGEMENT
+// ============================================================================
+
+export interface Risk {
+  id: string;
+  description: string;
+  category: "operational" | "technical" | "security" | "legal" | "financial";
+  probability: "low" | "medium" | "high";
+  impact: "low" | "medium" | "high" | "critical";
+  mitigationStrategy?: string;
+}
+
+export interface RiskManagement {
+  risks?: Risk[];
+}
+
+// ============================================================================
+// TECHNICAL REQUIREMENTS
+// ============================================================================
+
+export interface TechnicalRequirement {
+  category: "infrastructure" | "architecture" | "dataManagement" | "integration";
+  requirements: string[];
+  details?: Record<string, string>;
+}
+
+// ============================================================================
+// NON-FUNCTIONAL REQUIREMENTS
+// ============================================================================
+
+export interface NonFunctionalRequirement {
+  category: "performance" | "security" | "usability" | "reliability" | "scalability";
+  requirements: string[];
+  metrics?: Record<string, string>;
+}
+
+// ============================================================================
+// OPEN QUESTIONS & DECISIONS
+// ============================================================================
+
+export interface OpenQuestion {
+  id: string;
+  question: string;
+  category?: "client" | "technical" | "operational" | "legal";
+  priority?: "high" | "medium" | "low";
+  context?: string;
+}
+
+export interface OpenQuestions {
+  questions?: OpenQuestion[];
+  decisions?: Array<{
+    id: string;
+    decision: string;
+    rationale?: string;
+    date?: string;
+  }>;
 }
