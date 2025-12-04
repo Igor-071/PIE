@@ -275,7 +275,7 @@ export interface PrdJson {
     positioningAndMessaging?: PositioningAndMessaging;
     visualIdentity?: VisualIdentity;
     brandAssets?: BrandAssets;
-    competitiveAnalysis?: CompetitiveAnalysis;
+    competitiveAnalysis?: CompetitiveAnalysis | EnhancedCompetitiveAnalysis;
     webAndContentNotes?: WebAndContentNotes;
     problemDefinition?: ProblemDefinition;
     solutionOverview?: SolutionOverview;
@@ -284,10 +284,10 @@ export interface PrdJson {
     goalsAndSuccessCriteria?: GoalsAndSuccessCriteria;
     mvpScope?: MvpScope;
     assumptions?: Assumptions;
-    dependencies?: Dependencies;
+    dependencies?: Dependencies | EnhancedDependencies;
     roleDefinition?: RoleDefinition;
     productRequirements?: ProductRequirement[];
-    criticalUserFlows?: CriticalUserFlow[];
+    criticalUserFlows?: CriticalUserFlow[] | EnhancedCriticalUserFlow[];
     technicalRequirements?: TechnicalRequirement[];
     nonFunctionalRequirements?: NonFunctionalRequirement[];
     riskManagement?: RiskManagement;
@@ -297,12 +297,21 @@ export interface PrdJson {
     navigation?: Navigation[];
     userJourneys?: UserJourney[];
     flowDiagram?: FlowDiagram;
-    dataModel?: DataModel;
+    dataModel?: DataModel | EnhancedDataModel;
     api?: ApiEndpoint[];
     state?: State;
     events?: Event[];
     aiMetadata?: AiMetadata;
     metadata?: Metadata;
+    documentMetadata?: DocumentMetadata;
+    deliveryTimeline?: DeliveryTimeline;
+    launchPlan?: LaunchPlan;
+    stakeholdersAndRaci?: StakeholdersAndRaci;
+    designRequirements?: DesignRequirements;
+    testingStrategy?: TestingStrategy;
+    deploymentStrategy?: DeploymentStrategy;
+    analyticsAndMonitoring?: AnalyticsAndMonitoring;
+    glossary?: Glossary;
 }
 export interface ClientQuestion {
     field: string;
@@ -441,5 +450,431 @@ export interface OpenQuestions {
         rationale?: string;
         date?: string;
     }>;
+}
+export interface DocumentMetadata {
+    documentOwner?: string;
+    stakeholders?: string[];
+    collaborators?: string[];
+    referenceDocuments?: string[];
+    jiraLink?: string;
+    trdLink?: string;
+    lastUpdated?: string;
+    status?: "Draft" | "Review" | "Approved";
+}
+export interface EnhancedPersona extends TargetAudience {
+    techSavviness?: string;
+    preferredCommunicationChannels?: string[];
+    userScenarios?: string[];
+    motivations?: string[];
+    frustrations?: string[];
+    behavioralPatterns?: string[];
+}
+export interface EnhancedSuccessMetric extends SuccessMetric {
+    baseline?: string;
+    measurementFrequency?: string;
+    dataSource?: string;
+    owner?: string;
+    reviewCadence?: string;
+}
+export interface EnhancedAcceptanceCriteria extends AcceptanceCriteria {
+    edgeCases?: string[];
+    errorScenarios?: string[];
+    validationRules?: string[];
+    performanceRequirements?: string[];
+    accessibilityRequirements?: string[];
+}
+export interface EnhancedUserFlowStep extends UserFlowStep {
+    loadingState?: string;
+    successState?: string;
+    errorState?: string;
+    alternativePath?: boolean;
+}
+export interface EnhancedCriticalUserFlow extends CriticalUserFlow {
+    steps: EnhancedUserFlowStep[];
+    alternativePaths?: Array<{
+        name: string;
+        steps: EnhancedUserFlowStep[];
+    }>;
+    errorScenarios?: Array<{
+        scenario: string;
+        handling: string;
+    }>;
+    edgeCases?: string[];
+}
+export interface EnhancedRisk extends Risk {
+    riskOwner?: string;
+    contingencyPlan?: string;
+    monitoringIndicators?: string[];
+    reviewFrequency?: string;
+    escalationPath?: string;
+}
+export interface EnhancedServiceDependency extends ServiceDependency {
+    slaRequirements?: string;
+    versionConstraints?: string;
+    fallbackOptions?: string[];
+    integrationTestingRequirements?: string[];
+    supportContact?: string;
+}
+export interface EnhancedDependencies extends Dependencies {
+    service?: EnhancedServiceDependency[];
+}
+export interface EnhancedAccessMatrix {
+    feature: string;
+    superAdmin?: string;
+    medicalProvider?: string;
+    reception?: string;
+    patient?: string;
+    [key: string]: string | undefined | Record<string, {
+        view?: boolean;
+        create?: boolean;
+        edit?: boolean;
+        delete?: boolean;
+        approve?: boolean;
+    }>;
+    detailedPermissions?: Record<string, {
+        view?: boolean;
+        create?: boolean;
+        edit?: boolean;
+        delete?: boolean;
+        approve?: boolean;
+    }>;
+}
+export interface Competitor {
+    name: string;
+    strengths?: string[];
+    weaknesses?: string[];
+    marketPosition?: string;
+    keyDifferentiators?: string[];
+}
+export interface EnhancedCompetitiveAnalysis {
+    marketCategory?: string;
+    positioningSummary?: string;
+    comparativeDimensions?: string[];
+    competitors?: Competitor[] | string[];
+    differentiationStrategy?: DifferentiationStrategy;
+    visualReferences?: string[];
+}
+export interface DevelopmentPhase {
+    name: string;
+    duration: string;
+    teamSize: Record<string, number>;
+    deliverables: string[];
+    milestones: Array<{
+        week: number;
+        milestone: string;
+    }>;
+    costEstimate: {
+        min: number;
+        max: number;
+    };
+}
+export interface DeliveryTimeline {
+    phases?: DevelopmentPhase[];
+    totalCost?: {
+        labor: {
+            min: number;
+            max: number;
+        };
+        infrastructure: {
+            annual: {
+                min: number;
+                max: number;
+            };
+        };
+        thirdPartyServices?: {
+            annual: number;
+        };
+    };
+    resourceAllocation?: Record<string, number>;
+    timelineDependencies?: Array<{
+        week: number;
+        dependency: string;
+    }>;
+    riskFactors?: string[];
+}
+export interface LaunchStrategy {
+    approach: string;
+    phases: Array<{
+        name: string;
+        duration: string;
+        description: string;
+    }>;
+}
+export interface GoToMarketPlan {
+    preLaunch?: {
+        marketingActivities?: Array<{
+            activity: string;
+            timeline: string;
+        }>;
+        partnershipDevelopment?: string[];
+    };
+    launchWeek?: {
+        activities?: string[];
+    };
+    postLaunch?: {
+        activities?: string[];
+    };
+}
+export interface UserOnboardingStrategy {
+    provider?: {
+        steps: Array<{
+            step: number;
+            description: string;
+        }>;
+    };
+    patient?: {
+        steps: Array<{
+            step: number;
+            description: string;
+        }>;
+    };
+}
+export interface LaunchPlan {
+    launchStrategy?: LaunchStrategy;
+    goToMarketPlan?: GoToMarketPlan;
+    userOnboardingStrategy?: UserOnboardingStrategy;
+    successCriteria?: Record<string, {
+        week1?: Record<string, string>;
+        month1?: Record<string, string>;
+        month3?: Record<string, string>;
+    }>;
+    rollbackPlan?: {
+        triggerConditions?: string[];
+        procedure?: Array<{
+            phase: string;
+            actions: string[];
+            timeline: string;
+        }>;
+        contacts?: Record<string, string>;
+    };
+}
+export interface Stakeholder {
+    name: string;
+    role: string;
+    influence: "low" | "medium" | "high";
+    interest: "low" | "medium" | "high";
+    engagementLevel: string;
+}
+export interface RaciActivity {
+    activity: string;
+    responsible?: string[];
+    accountable?: string[];
+    consulted?: string[];
+    informed?: string[];
+}
+export interface DecisionMakingAuthority {
+    decisionType: string;
+    decisionMaker: string;
+    consultationRequired?: string[];
+}
+export interface CommunicationPlan {
+    daily?: Array<{
+        meeting: string;
+        time: string;
+        attendees: string[];
+    }>;
+    weekly?: Array<{
+        meeting: string;
+        day: string;
+        time: string;
+        attendees: string[];
+    }>;
+    biWeekly?: Array<{
+        meeting: string;
+        schedule: string;
+        attendees: string[];
+    }>;
+    monthly?: Array<{
+        meeting: string;
+        schedule: string;
+        attendees: string[];
+    }>;
+    adHoc?: Array<{
+        trigger: string;
+        response: string;
+    }>;
+}
+export interface StakeholdersAndRaci {
+    stakeholders?: Stakeholder[];
+    raciChart?: RaciActivity[];
+    decisionMakingAuthority?: DecisionMakingAuthority[];
+    communicationPlan?: CommunicationPlan;
+}
+export interface DesignSystem {
+    componentLibrary?: string;
+    designTokens?: {
+        primaryColor?: string;
+        secondaryColor?: string;
+        errorColor?: string;
+        warningColor?: string;
+        successColor?: string;
+        neutralColors?: string[];
+    };
+    typography?: {
+        headingFont?: string;
+        bodyFont?: string;
+        fontSizes?: string[];
+    };
+    spacingScale?: string;
+    borderRadius?: Record<string, string>;
+}
+export interface AccessibilityRequirements {
+    wcagLevel?: string;
+    colorContrast?: string;
+    keyboardNavigation?: boolean;
+    screenReaderSupport?: boolean;
+    focusIndicators?: boolean;
+    altText?: boolean;
+    formLabels?: boolean;
+    errorIdentification?: boolean;
+    testing?: string[];
+}
+export interface ResponsiveBreakpoints {
+    mobile?: string;
+    tablet?: string;
+    desktop?: string;
+    largeDesktop?: string;
+}
+export interface DesignRequirements {
+    designSystem?: DesignSystem;
+    uiUxGuidelines?: {
+        layoutPrinciples?: string[];
+        interactionPatterns?: string[];
+        contentGuidelines?: string[];
+    };
+    accessibilityRequirements?: AccessibilityRequirements;
+    responsiveBreakpoints?: ResponsiveBreakpoints;
+    componentLibraryReferences?: Record<string, string[]>;
+    brandGuidelinesCompliance?: string[];
+}
+export interface EnhancedDataModelField extends DataModelField {
+    constraints?: string[];
+    description?: string;
+    validationRules?: string[];
+}
+export interface EnhancedDataModelEntity {
+    fields: Record<string, EnhancedDataModelField>;
+    relationships?: DataModelRelationship[];
+    indexes?: Array<{
+        type: string;
+        fields: string[];
+    }>;
+    validationRules?: string[];
+}
+export interface EnhancedDataModel {
+    entities?: Record<string, EnhancedDataModelEntity>;
+    entityRelationships?: Array<{
+        from: string;
+        to: string;
+        relationship: string;
+    }>;
+    dataRetentionPolicies?: Record<string, string>;
+    dataMigrationRequirements?: {
+        sourceSystems?: string[];
+        migrationApproach?: string;
+        dataValidation?: string[];
+        rollbackPlan?: string;
+        timeline?: string;
+    };
+}
+export interface TestCoverageRequirements {
+    targetCoverage?: string;
+    unitTests?: string;
+    integrationTests?: string;
+    e2eTests?: string;
+}
+export interface TestingType {
+    name: string;
+    framework?: string;
+    scope?: string[];
+    requirements?: string[];
+}
+export interface TestDataRequirements {
+    testDataSets?: string[];
+    dataPrivacy?: string[];
+}
+export interface QaProcess {
+    testPlanning?: string[];
+    testExecution?: string[];
+    bugTracking?: string[];
+    testReporting?: string[];
+}
+export interface TestingStrategy {
+    testCoverageRequirements?: TestCoverageRequirements;
+    testingTypes?: TestingType[];
+    testDataRequirements?: TestDataRequirements;
+    qaProcess?: QaProcess;
+}
+export interface DeploymentApproach {
+    strategy: string;
+    rationale?: string;
+}
+export interface DeploymentProcess {
+    preDeployment?: string[];
+    deploymentSteps?: string[];
+    rollbackProcedure?: string[];
+}
+export interface EnvironmentSetup {
+    environments?: Record<string, string>;
+    environmentVariables?: string[];
+}
+export interface CiCdPipeline {
+    pipelineStages?: string[];
+    tools?: string[];
+}
+export interface MonitoringAndRollbackTriggers {
+    automatedRollbackTriggers?: string[];
+    manualRollbackTriggers?: string[];
+}
+export interface DeploymentStrategy {
+    deploymentApproach?: DeploymentApproach;
+    deploymentProcess?: DeploymentProcess;
+    environmentSetup?: EnvironmentSetup;
+    ciCdPipeline?: CiCdPipeline;
+    monitoringAndRollbackTriggers?: MonitoringAndRollbackTriggers;
+}
+export interface KeyMetrics {
+    userMetrics?: string[];
+    featureUsageMetrics?: string[];
+    performanceMetrics?: string[];
+    businessMetrics?: string[];
+}
+export interface DashboardRequirements {
+    executive?: string[];
+    product?: string[];
+    engineering?: string[];
+}
+export interface AlertingThresholds {
+    critical?: Array<{
+        condition: string;
+        notification: string;
+    }>;
+    warning?: Array<{
+        condition: string;
+        notification: string;
+    }>;
+    info?: Array<{
+        condition: string;
+        notification: string;
+    }>;
+}
+export interface LoggingRequirements {
+    applicationLogging?: string[];
+    logLevels?: Record<string, string>;
+    logRetention?: Record<string, string>;
+    logAggregation?: string[];
+}
+export interface AnalyticsAndMonitoring {
+    keyMetrics?: KeyMetrics;
+    dashboardRequirements?: DashboardRequirements;
+    alertingThresholds?: AlertingThresholds;
+    loggingRequirements?: LoggingRequirements;
+}
+export interface GlossaryTerm {
+    term: string;
+    definition: string;
+}
+export interface Glossary {
+    terms?: GlossaryTerm[];
 }
 //# sourceMappingURL=schema.d.ts.map
