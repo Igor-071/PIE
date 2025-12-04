@@ -19,6 +19,7 @@ export interface JobState {
   error?: string;
   outputDir?: string;
   projectName?: string;
+  markdownFilename?: string;
   cancelled?: boolean;
   createdAt: number; // Timestamp when job was created
 }

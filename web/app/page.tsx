@@ -24,6 +24,7 @@ interface JobState {
   error?: string;
   outputDir?: string;
   projectName?: string;
+  markdownFilename?: string;
 }
 
 export default function Home() {
@@ -259,7 +260,7 @@ export default function Home() {
           )}
 
           {/* Download Results */}
-          {jobState && jobState.status === "complete" && jobState.projectName && (
+          {jobState && jobState.status === "complete" && jobState.markdownFilename && (
             <div className="space-y-6">
               <div className="text-center border-b border-[#E7E1E2] pb-4">
                 <h2 className="text-2xl font-bold text-[#161010] mb-2">Success!</h2>
@@ -267,7 +268,7 @@ export default function Home() {
               </div>
               <DownloadResults
                 jobId={jobState.id}
-                projectName={jobState.projectName}
+                markdownFilename={jobState.markdownFilename}
               />
               <button
                 onClick={handleReset}

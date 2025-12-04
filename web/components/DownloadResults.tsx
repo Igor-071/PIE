@@ -2,18 +2,13 @@
 
 interface DownloadResultsProps {
   jobId: string;
-  projectName: string;
+  markdownFilename: string;
 }
 
 export default function DownloadResults({
   jobId,
-  projectName,
+  markdownFilename,
 }: DownloadResultsProps) {
-  const sanitizedProjectName = projectName
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-
   const downloadFile = async (filename: string) => {
     try {
       const response = await fetch(`/api/download?jobId=${jobId}&file=${filename}`);
@@ -65,7 +60,7 @@ export default function DownloadResults({
         </button>
 
         <button
-          onClick={() => downloadFile(`PRD_${sanitizedProjectName}.md`)}
+          onClick={() => downloadFile(markdownFilename)}
           className="flex flex-col items-center justify-center p-6 border-2 border-[#E7E1E2] rounded-lg hover:border-[#F24B57] hover:bg-[#F24B57]/5 transition-all duration-200 bg-white"
         >
           <svg

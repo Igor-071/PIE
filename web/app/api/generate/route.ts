@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import * as path from "path";
-import { pathToFileURL } from "url";
 import * as dotenv from "dotenv";
 import { createJob, updateJob, isJobCancelled } from "@/lib/jobStore";
+import { loadCoreModules, type CoreModules } from "@/lib/coreModules";
 
 // Load environment variables from parent directory
 const envPath = path.join(process.cwd(), "..", ".env");
@@ -14,81 +14,11 @@ console.log(`[generate] OPENAI_API_KEY exists: ${!!process.env.OPENAI_API_KEY}`)
 export async function POST(request: NextRequest) {
   // Ensure we always return JSON, even if there's an unexpected error
   try {
-    // Dynamically import core modules at runtime to avoid webpack bundling issues
-    // Use absolute file paths - Node.js supports absolute paths in dynamic imports
-    let coreModules;
+    // Load core modules using the wrapper
+    let coreModules: CoreModules;
     try {
       console.log("[generate] Loading core modules...");
-      // More reliable path resolution: go up from web directory to product-intelligence-engine, then to dist
-      const currentDir = process.cwd();
-      // If we're in web directory, go up one level; otherwise assume we're already in product-intelligence-engine
-      const baseDir = currentDir.endsWith("/web") || currentDir.endsWith("\\web") 
-        ? path.resolve(currentDir, "..")
-        : currentDir;
-      const distPath = path.resolve(baseDir, "dist");
-      console.log(`[generate] Current dir: ${currentDir}`);
-      console.log(`[generate] Base dir: ${baseDir}`);
-      console.log(`[generate] Dist path: ${distPath}`);
-      
-      // Verify dist directory exists
-      try {
-        await fs.access(distPath);
-      } catch {
-        throw new Error(`Dist directory not found at: ${distPath}. Please run 'npm run build' in the product-intelligence-engine directory.`);
-      }
-      
-      // Convert absolute paths to file:// URLs for dynamic imports
-      const unzipRepoPath = pathToFileURL(path.join(distPath, "core", "unzipRepo.js")).href;
-      const tier1Path = pathToFileURL(path.join(distPath, "core", "tier1Extractor.js")).href;
-      const evidencePath = pathToFileURL(path.join(distPath, "core", "evidenceCollector.js")).href;
-      const mergerPath = pathToFileURL(path.join(distPath, "core", "jsonMerger.js")).href;
-      const tier2Path = pathToFileURL(path.join(distPath, "core", "tier2Agent.js")).href;
-      const prdPath = pathToFileURL(path.join(distPath, "core", "prdGenerator.js")).href;
-      
-      // Verify files exist before importing
-      const filesToCheck = [
-        { name: "unzipRepo.js", path: path.join(distPath, "core", "unzipRepo.js") },
-        { name: "tier1Extractor.js", path: path.join(distPath, "core", "tier1Extractor.js") },
-        { name: "evidenceCollector.js", path: path.join(distPath, "core", "evidenceCollector.js") },
-        { name: "jsonMerger.js", path: path.join(distPath, "core", "jsonMerger.js") },
-        { name: "tier2Agent.js", path: path.join(distPath, "core", "tier2Agent.js") },
-        { name: "prdGenerator.js", path: path.join(distPath, "core", "prdGenerator.js") },
-      ];
-      
-      for (const file of filesToCheck) {
-        try {
-          await fs.access(file.path);
-        } catch {
-          throw new Error(`Required module file not found: ${file.name} at ${file.path}. Please run 'npm run build' in the product-intelligence-engine directory.`);
-        }
-      }
-      
-      console.log(`[generate] Importing from: ${unzipRepoPath}`);
-      
-      const [
-        unzipRepoModule,
-        tier1Module,
-        evidenceModule,
-        mergerModule,
-        tier2Module,
-        prdModule,
-      ] = await Promise.all([
-        import(unzipRepoPath),
-        import(tier1Path),
-        import(evidencePath),
-        import(mergerPath),
-        import(tier2Path),
-        import(prdPath),
-      ]);
-
-      coreModules = {
-        unzipRepository: unzipRepoModule.unzipRepository,
-        extractTier1: tier1Module.extractTier1,
-        collectEvidence: evidenceModule.collectEvidence,
-        buildInitialPrdJsonFromTier1: mergerModule.buildInitialPrdJsonFromTier1,
-        runTier2Agent: tier2Module.runTier2Agent,
-        writePrdArtifacts: prdModule.writePrdArtifacts,
-      };
+      coreModules = await loadCoreModules();
       console.log("[generate] Core modules loaded successfully");
     } catch (importError) {
       console.error("[generate] Failed to import core modules:", importError);
@@ -103,7 +33,7 @@ export async function POST(request: NextRequest) {
       if (errorMessage.includes("Cannot find module") || errorMessage.includes("not found")) {
         userMessage = "Core modules not found. The project needs to be built.";
         hint = "Run 'cd product-intelligence-engine && npm run build' to compile the core modules.";
-      } else if (errorMessage.includes("dist directory")) {
+      } else if (errorMessage.includes("Cannot load core module")) {
         userMessage = errorMessage;
         hint = "Make sure you're running the web app from the correct directory and that the build completed successfully.";
       } else if (errorMessage.includes("pdf-parse") || errorMessage.includes("mammoth") || errorMessage.includes("adm-zip")) {
@@ -208,16 +138,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Type definitions for core modules (avoiding TypeScript resolution issues with dynamic imports)
-interface CoreModules {
-  unzipRepository: (zipPath: string) => Promise<string>;
-  extractTier1: (repoPath: string) => Promise<any>;
-  collectEvidence: (repoPath: string, options?: any) => Promise<any[]>;
-  buildInitialPrdJsonFromTier1: (tier1: any) => any;
-  runTier2Agent: (baseJson: any, evidence: any[], options?: any) => Promise<any>;
-  writePrdArtifacts: (prd: any, questions: any, options: any) => Promise<void>;
-}
-
 async function processJob(
   jobId: string,
   zipFile: File,
@@ -307,6 +227,7 @@ async function processJob(
     unzippedPath = await unzipRepository(zipPath);
     let outputDir: string | undefined;
     let projectName: string | undefined;
+    let markdownFilename: string | undefined;
 
     try {
       // Step 2: Extract Tier 1 data
@@ -369,10 +290,11 @@ async function processJob(
       }
 
       outputDir = path.join(process.cwd(), "tmp", "output", jobId);
-      await writePrdArtifacts(result.updatedJson, result.questionsForClient, {
+      const artifacts = await writePrdArtifacts(result.updatedJson, result.questionsForClient, {
         outputDir,
         projectName: tier1.projectName,
       });
+      markdownFilename = artifacts.markdownFilename;
 
       // Clean up uploaded files
       try {
@@ -403,6 +325,7 @@ async function processJob(
         message: "PRD generated successfully",
         outputDir,
         projectName: projectName || "unknown",
+        markdownFilename,
       });
     }
   } catch (error) {

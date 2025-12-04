@@ -1,0 +1,35 @@
+{
+  "questions": [
+    {
+      "field": "brandFoundations.mission",
+      "question": "What is the core mission?",
+      "reason": "Not found in evidence",
+      "priority": "high"
+    },
+    {
+      "field": "brandFoundations.vision",
+      "question": "What is the long-term vision for this product?",
+      "reason": "Not found in evidence",
+      "priority": "high"
+    },
+    {
+      "field": "brandFoundations.toneOfVoice",
+      "question": "How do you want to communicate with your users?",
+      "reason": "Not clearly defined in evidence",
+      "priority": "medium"
+    },
+    {
+      "field": "solutionOverview.nonFunctionalRequirements",
+      "question": "Are there specific performance or security requirements we should consider?",
+      "reason": "Not detailed in evidence",
+      "priority": "medium"
+    },
+    {
+      "field": "leanCanvas.customerSegments",
+      "question": "Are there any additional specific customer segments we should focus on?",
+      "reason": "Not detailed in evidence",
+      "priority": "medium"
+    }
+  ],
+  "generatedAt": "2025-12-04T10:28:40.961Z"
+}

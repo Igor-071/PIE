@@ -1,0 +1,47 @@
+{
+  "questions": [
+    {
+      "field": "brandFoundations.mission",
+      "question": "What is the core mission?",
+      "reason": "Not found in evidence",
+      "priority": "high"
+    },
+    {
+      "field": "brandFoundations.vision",
+      "question": "What is the long-term vision of the company?",
+      "reason": "Not found in evidence",
+      "priority": "high"
+    },
+    {
+      "field": "solutionOverview.keyFeatures",
+      "question": "What are the additional key features that should be included?",
+      "reason": "Current features inferred may not capture all capabilities.",
+      "priority": "medium"
+    },
+    {
+      "field": "leanCanvas.customerSegments",
+      "question": "Are there specific customer segments not mentioned that should be included?",
+      "reason": "To ensure comprehensive market coverage.",
+      "priority": "medium"
+    },
+    {
+      "field": "competitiveAnalysis",
+      "question": "Who are the direct competitors in this space?",
+      "reason": "To refine competitive positioning.",
+      "priority": "high"
+    },
+    {
+      "field": "customerProfiles",
+      "question": "Could you provide detailed profiles of ideal customers?",
+      "reason": "To create more accurate user personas.",
+      "priority": "medium"
+    },
+    {
+      "field": "targetAudience",
+      "question": "Are there additional personas to consider?",
+      "reason": "To ensure all potential users are represented.",
+      "priority": "medium"
+    }
+  ],
+  "generatedAt": "2025-12-04T09:39:17.202Z"
+}

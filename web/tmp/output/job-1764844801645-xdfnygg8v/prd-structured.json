@@ -1,0 +1,912 @@
+{
+  "project": {
+    "id": "4ab32bae68a4321d",
+    "name": "Vite_react_shadcn_ts",
+    "version": "1.0.0",
+    "createdAt": "2025-12-04T10:40:01.999Z",
+    "updatedAt": "2025-12-04T10:40:01.999Z"
+  },
+  "screens": [
+    {
+      "id": "8e8ddccfa3d75c47",
+      "name": "AppLayout",
+      "path": "src/components/AppLayout.tsx",
+      "purpose": "AppLayout screen"
+    },
+    {
+      "id": "81310c8c1b018284",
+      "name": "NavLink",
+      "path": "src/components/NavLink.tsx",
+      "purpose": "NavLink screen"
+    },
+    {
+      "id": "d4bc5fb8ea23fe5f",
+      "name": "NotificationBell",
+      "path": "src/components/NotificationBell.tsx",
+      "purpose": "NotificationBell screen"
+    },
+    {
+      "id": "ca3521cfba298bb3",
+      "name": "NotificationsList",
+      "path": "src/components/NotificationsList.tsx",
+      "purpose": "NotificationsList screen"
+    },
+    {
+      "id": "87b750c8772ec46b",
+      "name": "PatientLayout",
+      "path": "src/components/PatientLayout.tsx",
+      "purpose": "PatientLayout screen"
+    },
+    {
+      "id": "e2c2ea6ce812cf2b",
+      "name": "PhotoGallery",
+      "path": "src/components/PhotoGallery.tsx",
+      "purpose": "PhotoGallery screen"
+    },
+    {
+      "id": "1aec645668d4bfa7",
+      "name": "ProtectedRoute",
+      "path": "src/components/ProtectedRoute.tsx",
+      "purpose": "ProtectedRoute screen"
+    },
+    {
+      "id": "e6e9398836a5dc23",
+      "name": "ProviderCard",
+      "path": "src/components/ProviderCard.tsx",
+      "purpose": "ProviderCard screen"
+    },
+    {
+      "id": "b95b2d142bb0216b",
+      "name": "TreatmentChart",
+      "path": "src/components/TreatmentChart.tsx",
+      "purpose": "TreatmentChart screen"
+    },
+    {
+      "id": "0b76aa94838681df",
+      "name": "Dashboard",
+      "path": "src/pages/Dashboard.tsx",
+      "purpose": "Dashboard overview"
+    },
+    {
+      "id": "cede2f38edc8f623",
+      "name": "Diagnostic",
+      "path": "src/pages/Diagnostic.tsx",
+      "purpose": "Diagnostic screen"
+    },
+    {
+      "id": "ce7a7d65cccf872c",
+      "name": "Implants",
+      "path": "src/pages/Implants.tsx",
+      "purpose": "Implants screen"
+    },
+    {
+      "id": "491df099983b81f3",
+      "name": "Inventory",
+      "path": "src/pages/Inventory.tsx",
+      "purpose": "Inventory management"
+    },
+    {
+      "id": "e527de1174bd0e79",
+      "name": "Landing",
+      "path": "src/pages/Landing.tsx",
+      "purpose": "Landing screen"
+    },
+    {
+      "id": "b34fcdbf6078043a",
+      "name": "Login",
+      "path": "src/pages/Login.tsx",
+      "purpose": "User authentication"
+    },
+    {
+      "id": "86073cae7ae1c5b8",
+      "name": "NotFound",
+      "path": "src/pages/NotFound.tsx",
+      "purpose": "NotFound screen"
+    },
+    {
+      "id": "765f17e5fe8df332",
+      "name": "PatientDetail",
+      "path": "src/pages/PatientDetail.tsx",
+      "purpose": "Patient details management"
+    },
+    {
+      "id": "2b4773c75f6dd762",
+      "name": "PatientDocuments",
+      "path": "src/pages/PatientDocuments.tsx",
+      "purpose": "PatientDocuments screen"
+    },
+    {
+      "id": "722a129a99b23369",
+      "name": "PatientImplants",
+      "path": "src/pages/PatientImplants.tsx",
+      "purpose": "PatientImplants screen"
+    },
+    {
+      "id": "aa6dc4606ff9b9e2",
+      "name": "PatientLogin",
+      "path": "src/pages/PatientLogin.tsx",
+      "purpose": "User authentication"
+    },
+    {
+      "id": "d6efd4b76278d580",
+      "name": "PatientPortal",
+      "path": "src/pages/PatientPortal.tsx",
+      "purpose": "PatientPortal screen"
+    },
+    {
+      "id": "1eb4869202824cf5",
+      "name": "PatientProfile",
+      "path": "src/pages/PatientProfile.tsx",
+      "purpose": "Patient details management"
+    },
+    {
+      "id": "26c53489e4685c79",
+      "name": "PatientRecords",
+      "path": "src/pages/PatientRecords.tsx",
+      "purpose": "PatientRecords screen"
+    },
+    {
+      "id": "f0eaa6b82ea563c4",
+      "name": "Patients",
+      "path": "src/pages/Patients.tsx",
+      "purpose": "Patients screen"
+    },
+    {
+      "id": "e3c4a9408cf5441c",
+      "name": "Reports",
+      "path": "src/pages/Reports.tsx",
+      "purpose": "Reporting and analytics"
+    },
+    {
+      "id": "f31ffba4b1f685a3",
+      "name": "Schedule",
+      "path": "src/pages/Schedule.tsx",
+      "purpose": "Scheduling and appointments"
+    },
+    {
+      "id": "c03aacab1e368871",
+      "name": "Settings",
+      "path": "src/pages/Settings.tsx",
+      "purpose": "Application settings"
+    },
+    {
+      "id": "816c444896ee458c",
+      "name": "Templates",
+      "path": "src/pages/Templates.tsx",
+      "purpose": "Templates screen"
+    }
+  ],
+  "navigation": [
+    {
+      "label": "Dashboard",
+      "path": "/Dashboard"
+    },
+    {
+      "label": "Diagnostic",
+      "path": "/Diagnostic"
+    },
+    {
+      "label": "Implants",
+      "path": "/Implants"
+    },
+    {
+      "label": "Inventory",
+      "path": "/Inventory"
+    },
+    {
+      "label": "Landing",
+      "path": "/Landing"
+    },
+    {
+      "label": "Login",
+      "path": "/Login"
+    },
+    {
+      "label": "NotFound",
+      "path": "/NotFound"
+    },
+    {
+      "label": "PatientDetail",
+      "path": "/PatientDetail"
+    },
+    {
+      "label": "PatientDocuments",
+      "path": "/PatientDocuments"
+    },
+    {
+      "label": "PatientImplants",
+      "path": "/PatientImplants"
+    },
+    {
+      "label": "PatientLogin",
+      "path": "/PatientLogin"
+    },
+    {
+      "label": "PatientPortal",
+      "path": "/PatientPortal"
+    },
+    {
+      "label": "PatientProfile",
+      "path": "/PatientProfile"
+    },
+    {
+      "label": "PatientRecords",
+      "path": "/PatientRecords"
+    },
+    {
+      "label": "Patients",
+      "path": "/Patients"
+    },
+    {
+      "label": "Reports",
+      "path": "/Reports"
+    },
+    {
+      "label": "Schedule",
+      "path": "/Schedule"
+    },
+    {
+      "label": "Settings",
+      "path": "/Settings"
+    },
+    {
+      "label": "Templates",
+      "path": "/Templates"
+    }
+  ],
+  "api": [
+    {
+      "name": "cache",
+      "endpoint": "/graphql/cache",
+      "method": "GRAPHQL",
+      "handler": "src/hooks/use-realtime.ts",
+      "framework": "graphql"
+    }
+  ],
+  "dataModel": {},
+  "state": {
+    "global": {
+      "stateManagement": [
+        {
+          "type": "react-context",
+          "stores": [
+            "AuthContext",
+            "AuthProvider"
+          ]
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "id": "77524f5a197a8126",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        "handleSignOut"
+      ],
+      "name": "onClick",
+      "handler": "handleSignOut",
+      "location": "src/components/AppLayout.tsx"
+    },
+    {
+      "id": "0f698d5faba387e2",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        "markAllAsRead"
+      ],
+      "name": "onClick",
+      "handler": "markAllAsRead",
+      "location": "src/components/NotificationsList.tsx"
+    },
+    {
+      "id": "8ebc52615f71de53",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => navigatepath"
+      ],
+      "name": "onClick",
+      "handler": " => navigatepath",
+      "location": "src/components/PatientLayout.tsx"
+    },
+    {
+      "id": "4a09bfb749a2e287",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setShowGallerytrue"
+      ],
+      "name": "onClick",
+      "handler": " => setShowGallerytrue",
+      "location": "src/components/PhotoGallery.tsx"
+    },
+    {
+      "id": "6c0571c1375b0443",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => window.location.href = `tel:${provider.phone"
+      ],
+      "name": "onClick",
+      "handler": " => window.location.href = `tel:${provider.phone",
+      "location": "src/components/ProviderCard.tsx"
+    },
+    {
+      "id": "53ef0a74a511cdc0",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => acknowledge.mutatealert"
+      ],
+      "name": "onClick",
+      "handler": " => acknowledge.mutatealert",
+      "location": "src/pages/Dashboard.tsx"
+    },
+    {
+      "id": "70abbaf610d828be",
+      "type": "user-interaction",
+      "trigger": "onclick",
+      "outputs": [
+        "inline"
+      ],
+      "name": "onclick",
+      "handler": "inline",
+      "location": "src/pages/Implants.tsx"
+    },
+    {
+      "id": "2fef27cf84b3a449",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleRegisterImplant"
+      ],
+      "name": "onSubmit",
+      "handler": "handleRegisterImplant",
+      "location": "src/pages/Implants.tsx"
+    },
+    {
+      "id": "30b7d730e29a1f8b",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "handleInputChange\"deviceName\""
+      ],
+      "name": "onChange",
+      "handler": "handleInputChange\"deviceName\"",
+      "location": "src/pages/Implants.tsx"
+    },
+    {
+      "id": "c0b52ea939642841",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setIsDialogOpenfalse"
+      ],
+      "name": "onClick",
+      "handler": " => setIsDialogOpenfalse",
+      "location": "src/pages/Implants.tsx"
+    },
+    {
+      "id": "de867ea31bb1a616",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleAddProduct"
+      ],
+      "name": "onSubmit",
+      "handler": "handleAddProduct",
+      "location": "src/pages/Inventory.tsx"
+    },
+    {
+      "id": "fdc85ad9e54fafdc",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "handleInputChange\"productName\""
+      ],
+      "name": "onChange",
+      "handler": "handleInputChange\"productName\"",
+      "location": "src/pages/Inventory.tsx"
+    },
+    {
+      "id": "cde764806b9b7c25",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setIsAddDialogOpenfalse"
+      ],
+      "name": "onClick",
+      "handler": " => setIsAddDialogOpenfalse",
+      "location": "src/pages/Inventory.tsx"
+    },
+    {
+      "id": "1a5ecc407f994bec",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => navigate\"/login/clinic\""
+      ],
+      "name": "onClick",
+      "handler": " => navigate\"/login/clinic\"",
+      "location": "src/pages/Landing.tsx"
+    },
+    {
+      "id": "b8b5058cfc236db8",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => navigate\"/\""
+      ],
+      "name": "onClick",
+      "handler": " => navigate\"/\"",
+      "location": "src/pages/Login.tsx"
+    },
+    {
+      "id": "87a8e87e89f50025",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleLogin"
+      ],
+      "name": "onSubmit",
+      "handler": "handleLogin",
+      "location": "src/pages/Login.tsx"
+    },
+    {
+      "id": "f0979960cc84ed5c",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "e => setEmaile.target.value"
+      ],
+      "name": "onChange",
+      "handler": "e => setEmaile.target.value",
+      "location": "src/pages/Login.tsx"
+    },
+    {
+      "id": "c7e1bf56acbf035c",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleSubmitImplant"
+      ],
+      "name": "onSubmit",
+      "handler": "handleSubmitImplant",
+      "location": "src/pages/PatientDetail.tsx"
+    },
+    {
+      "id": "8b257634526abed8",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "handleImplantChange\"deviceName\""
+      ],
+      "name": "onChange",
+      "handler": "handleImplantChange\"deviceName\"",
+      "location": "src/pages/PatientDetail.tsx"
+    },
+    {
+      "id": "d0354a0ed2a315c2",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setImplantDialogOpenfalse"
+      ],
+      "name": "onClick",
+      "handler": " => setImplantDialogOpenfalse",
+      "location": "src/pages/PatientDetail.tsx"
+    },
+    {
+      "id": "5da47186723d385f",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => window.opengetDocumentUrldoc.storage_path, \"_blank\""
+      ],
+      "name": "onClick",
+      "handler": " => window.opengetDocumentUrldoc.storage_path, \"_blank\"",
+      "location": "src/pages/PatientDocuments.tsx"
+    },
+    {
+      "id": "0c6a79fe40cca33c",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleSubmit"
+      ],
+      "name": "onSubmit",
+      "handler": "handleSubmit",
+      "location": "src/pages/PatientImplants.tsx"
+    },
+    {
+      "id": "e7bec2ffbda190bd",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "handleInputChange"
+      ],
+      "name": "onChange",
+      "handler": "handleInputChange",
+      "location": "src/pages/PatientImplants.tsx"
+    },
+    {
+      "id": "2dd493dca9d786ca",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setIsDialogOpenfalse"
+      ],
+      "name": "onClick",
+      "handler": " => setIsDialogOpenfalse",
+      "location": "src/pages/PatientImplants.tsx"
+    },
+    {
+      "id": "031750d048785e72",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => navigate\"/\""
+      ],
+      "name": "onClick",
+      "handler": " => navigate\"/\"",
+      "location": "src/pages/PatientLogin.tsx"
+    },
+    {
+      "id": "42e479d4485da250",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleLogin"
+      ],
+      "name": "onSubmit",
+      "handler": "handleLogin",
+      "location": "src/pages/PatientLogin.tsx"
+    },
+    {
+      "id": "3da7c08c3218f755",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "e => setEmaile.target.value"
+      ],
+      "name": "onChange",
+      "handler": "e => setEmaile.target.value",
+      "location": "src/pages/PatientLogin.tsx"
+    },
+    {
+      "id": "9b77eece02915452",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => navigate\"/portal/records\""
+      ],
+      "name": "onClick",
+      "handler": " => navigate\"/portal/records\"",
+      "location": "src/pages/PatientPortal.tsx"
+    },
+    {
+      "id": "9da796e2357c827c",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        "handleSignOut"
+      ],
+      "name": "onClick",
+      "handler": "handleSignOut",
+      "location": "src/pages/PatientProfile.tsx"
+    },
+    {
+      "id": "a5eb9e16c23e6980",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleCreatePatient"
+      ],
+      "name": "onSubmit",
+      "handler": "handleCreatePatient",
+      "location": "src/pages/Patients.tsx"
+    },
+    {
+      "id": "e6abd642c8a94157",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "handleInputChange\"firstName\""
+      ],
+      "name": "onChange",
+      "handler": "handleInputChange\"firstName\"",
+      "location": "src/pages/Patients.tsx"
+    },
+    {
+      "id": "ad6579ad10082f74",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setIsDialogOpenfalse"
+      ],
+      "name": "onClick",
+      "handler": " => setIsDialogOpenfalse",
+      "location": "src/pages/Patients.tsx"
+    },
+    {
+      "id": "058343ec33fa7998",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        "handleExportTreatments"
+      ],
+      "name": "onClick",
+      "handler": "handleExportTreatments",
+      "location": "src/pages/Reports.tsx"
+    },
+    {
+      "id": "b1977158192dc1aa",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "e => setTreatmentStartDatee.target.value"
+      ],
+      "name": "onChange",
+      "handler": "e => setTreatmentStartDatee.target.value",
+      "location": "src/pages/Reports.tsx"
+    },
+    {
+      "id": "6bcee7062f8f4795",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleCreateAppointment"
+      ],
+      "name": "onSubmit",
+      "handler": "handleCreateAppointment",
+      "location": "src/pages/Schedule.tsx"
+    },
+    {
+      "id": "e87bc23d757b6176",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "handleInputChange\"appointmentDate\""
+      ],
+      "name": "onChange",
+      "handler": "handleInputChange\"appointmentDate\"",
+      "location": "src/pages/Schedule.tsx"
+    },
+    {
+      "id": "96420650a22f0b99",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setIsAddDialogOpenfalse"
+      ],
+      "name": "onClick",
+      "handler": " => setIsAddDialogOpenfalse",
+      "location": "src/pages/Schedule.tsx"
+    },
+    {
+      "id": "149f7f07c3f66c22",
+      "type": "user-interaction",
+      "trigger": "onSelect",
+      "outputs": [
+        "setSelectedDate"
+      ],
+      "name": "onSelect",
+      "handler": "setSelectedDate",
+      "location": "src/pages/Schedule.tsx"
+    },
+    {
+      "id": "816ea1eefbb188b4",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleClinicSubmit"
+      ],
+      "name": "onSubmit",
+      "handler": "handleClinicSubmit",
+      "location": "src/pages/Settings.tsx"
+    },
+    {
+      "id": "22e301db6f1d470f",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "e => setClinicForm{ ...clinicForm, clinic_name: e.target.value"
+      ],
+      "name": "onChange",
+      "handler": "e => setClinicForm{ ...clinicForm, clinic_name: e.target.value",
+      "location": "src/pages/Settings.tsx"
+    },
+    {
+      "id": "528288f55a523317",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setStaffDialogOpenfalse"
+      ],
+      "name": "onClick",
+      "handler": " => setStaffDialogOpenfalse",
+      "location": "src/pages/Settings.tsx"
+    },
+    {
+      "id": "d1a5129cac5bb055",
+      "type": "user-interaction",
+      "trigger": "onSubmit",
+      "outputs": [
+        "handleAddTemplate"
+      ],
+      "name": "onSubmit",
+      "handler": "handleAddTemplate",
+      "location": "src/pages/Templates.tsx"
+    },
+    {
+      "id": "4b7e609430067041",
+      "type": "user-interaction",
+      "trigger": "onChange",
+      "outputs": [
+        "handleInputChange\"name\""
+      ],
+      "name": "onChange",
+      "handler": "handleInputChange\"name\"",
+      "location": "src/pages/Templates.tsx"
+    },
+    {
+      "id": "164ddba9cf9a9220",
+      "type": "user-interaction",
+      "trigger": "onClick",
+      "outputs": [
+        " => setIsAddDialogOpenfalse"
+      ],
+      "name": "onClick",
+      "handler": " => setIsAddDialogOpenfalse",
+      "location": "src/pages/Templates.tsx"
+    }
+  ],
+  "aiMetadata": {
+    "extractedAt": "2025-12-04T10:40:01.999Z",
+    "stackDetected": [
+      "nextjs",
+      "nodejs",
+      "react"
+    ],
+    "extractionNotes": "Scanned 164 files; Found 28 screens/pages; Found 1 API endpoints; Found 0 data model entities; Found 19 navigation items; Found 1 state management patterns; Found 44 event handlers"
+  },
+  "brandFoundations": {
+    "mission": "To provide seamless and efficient management of patient records and treatment data in healthcare settings.",
+    "vision": "To be the leading healthcare management platform that enhances patient care through innovative technology.",
+    "coreValues": [
+      "Integrity",
+      "Innovation",
+      "Collaboration",
+      "Patient-Centricity"
+    ],
+    "problemStatement": "Healthcare providers struggle with managing patient data effectively, leading to inefficiencies and errors.",
+    "solutionStatement": "Our platform centralizes patient data, making it easily accessible and manageable for healthcare providers.",
+    "toneOfVoice": "Professional, Empathetic, Supportive",
+    "brandEthos": "Empowering healthcare providers through technology.",
+    "brandArchetype": "Caregiver",
+    "brandPromise": "To provide reliable and user-friendly tools that improve patient care."
+  },
+  "targetAudience": [
+    {
+      "name": "Healthcare Providers",
+      "demographics": {
+        "age": "30-60",
+        "location": "Urban Areas",
+        "jobTitles": [
+          "Clinic Admin",
+          "Healthcare Provider",
+          "Nurse"
+        ]
+      },
+      "psychographics": {
+        "lifestyle": "Busy professionals focused on patient care.",
+        "attitudes": "Value efficiency and accuracy in their work."
+      },
+      "goals": "To manage patient data efficiently and improve patient outcomes.",
+      "painPoints": [
+        "\"I want to spend more time with patients and less time on paperwork.\"",
+        "\"Finding patient records is often time-consuming and frustrating.\""
+      ],
+      "jobsToBeDone": [
+        "Log patient treatments and appointments.",
+        "Access patient history quickly during consultations."
+      ]
+    },
+    {
+      "name": "Patients",
+      "demographics": {
+        "age": "18-75",
+        "location": "Varies",
+        "jobTitles": [
+          "Any"
+        ]
+      },
+      "psychographics": {
+        "lifestyle": "Varied; from tech-savvy to less experienced with technology.",
+        "attitudes": "Desire easy access to their health information."
+      },
+      "goals": "To access their medical records and treatment history easily.",
+      "painPoints": [
+        "\"I want to see my medical history in one place.\"",
+        "\"It’s difficult to contact my provider for questions.\""
+      ],
+      "jobsToBeDone": [
+        "View treatment history and upcoming appointments.",
+        "Download important healthcare documents."
+      ]
+    }
+  ],
+  "problemDefinition": {
+    "primaryProblem": "Healthcare providers face challenges in efficiently managing patient data, leading to errors and inefficiencies.",
+    "secondaryProblems": [
+      "Patients struggle to access their medical records.",
+      "Manual processes lead to delays in patient care."
+    ],
+    "userPainPoints": [
+      "Frustration with time spent on administrative tasks.",
+      "Difficulty in retrieving patient information quickly."
+    ],
+    "businessImpact": "Inefficient data management practices can lead to lost patients, lower satisfaction, and increased administrative costs."
+  },
+  "solutionOverview": {
+    "valueProposition": "A comprehensive digital platform that connects healthcare providers and patients, streamlining record management and enhancing patient experiences.",
+    "keyFeatures": [
+      "Centralized patient data management.",
+      "Real-time data access and updates.",
+      "User-friendly interface for both providers and patients."
+    ],
+    "differentiators": "Our platform combines advanced analytics and user-centric design to create a seamless experience for healthcare management.",
+    "nonFunctionalRequirements": [
+      "Data encryption for security.",
+      "High availability and performance.",
+      "Compliance with healthcare regulations."
+    ]
+  },
+  "leanCanvas": {
+    "uniqueValueProposition": "Effortless healthcare data management for providers and easy access for patients.",
+    "customerSegments": [
+      "Healthcare facilities (clinics, hospitals)",
+      "Individual healthcare providers",
+      "Patients seeking easy access to their medical records"
+    ],
+    "keyMetrics": [
+      "Number of active providers using the platform.",
+      "Patient engagement rates.",
+      "Reduction in administrative errors."
+    ],
+    "channels": [
+      "Direct sales to healthcare facilities.",
+      "Partnerships with healthcare organizations.",
+      "Digital marketing targeting healthcare professionals."
+    ],
+    "costStructure": [
+      "Development and maintenance of the platform.",
+      "Marketing and sales expenses.",
+      "Customer support and training services."
+    ],
+    "revenueStreams": [
+      "Subscription fees for healthcare providers.",
+      "Transaction fees for document management services.",
+      "Premium features for advanced analytics."
+    ]
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "generatedAt": "2025-12-04T10:40:02.005Z",
+    "generatorVersion": "0.1.0"
+  },
+  "positioningAndMessaging": "Positioned as a reliable partner for healthcare management, focusing on improving patient care and operational efficiency.",
+  "competitiveAnalysis": "Our main competitors are established healthcare management systems that lack a user-friendly interface.",
+  "customerProfiles": [
+    {
+      "name": "Healthcare Provider",
+      "description": "A busy professional needing efficient ways to manage patient data."
+    },
+    {
+      "name": "Patient",
+      "description": "An individual seeking easy access to personal health records."
+    }
+  ]
+}

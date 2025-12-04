@@ -1,0 +1,47 @@
+{
+  "questions": [
+    {
+      "field": "brandFoundations.mission",
+      "question": "What is the core mission?",
+      "reason": "Not found in evidence",
+      "priority": "high"
+    },
+    {
+      "field": "brandFoundations.vision",
+      "question": "What is the long-term vision for the product?",
+      "reason": "Not found in evidence",
+      "priority": "high"
+    },
+    {
+      "field": "brandFoundations.coreValues",
+      "question": "Can you list the top core values of the company?",
+      "reason": "Not found in evidence",
+      "priority": "medium"
+    },
+    {
+      "field": "problemDefinition.secondaryProblems",
+      "question": "What secondary problems are being considered for future development?",
+      "reason": "Not clearly defined from the evidence",
+      "priority": "medium"
+    },
+    {
+      "field": "solutionOverview.keyFeatures",
+      "question": "Can you elaborate on the key features the platform should offer?",
+      "reason": "Not found in evidence",
+      "priority": "medium"
+    },
+    {
+      "field": "leanCanvas.customerSegments",
+      "question": "Can you define specific customer segments you are targeting?",
+      "reason": "Not fully detailed in existing evidence",
+      "priority": "medium"
+    },
+    {
+      "field": "competitiveAnalysis",
+      "question": "Who are the main competitors in your view?",
+      "reason": "Not described in evidence",
+      "priority": "medium"
+    }
+  ],
+  "generatedAt": "2025-12-04T10:40:02.005Z"
+}

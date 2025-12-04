@@ -1,0 +1,1 @@
+{"version":3,"file":"jsonMerger.js","sourceRoot":"","sources":["../../src/core/jsonMerger.ts"],"names":[],"mappings":"AAIA;;;;GAIG;AACH,MAAM,UAAU,4BAA4B,CAAC,KAAc;IACzD,wEAAwE;IACxE,8BAA8B;IAC9B,OAAO;QACL,GAAG,KAAK;QACR,QAAQ,EAAE;YACR,OAAO,EAAE,OAAO;YAChB,WAAW,EAAE,IAAI,IAAI,EAAE,CAAC,WAAW,EAAE;YACrC,gBAAgB,EAAE,OAAO;SAC1B;KACF,CAAC;AACJ,CAAC"}

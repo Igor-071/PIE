@@ -1,0 +1,47 @@
+{
+  "questions": [
+    {
+      "field": "brandFoundations.mission",
+      "question": "What is the core mission?",
+      "reason": "Not found in evidence",
+      "priority": "high"
+    },
+    {
+      "field": "brandFoundations.vision",
+      "question": "What is the long-term vision for the company?",
+      "reason": "Not found in evidence",
+      "priority": "high"
+    },
+    {
+      "field": "leanCanvas.revenueStreams",
+      "question": "What are the expected revenue streams?",
+      "reason": "Not explicitly defined",
+      "priority": "medium"
+    },
+    {
+      "field": "targetAudience[0].painPoints",
+      "question": "Can you provide specific pain points for healthcare providers?",
+      "reason": "Need more detailed quotes or examples",
+      "priority": "medium"
+    },
+    {
+      "field": "targetAudience[1].painPoints",
+      "question": "What are specific pain points of patients?",
+      "reason": "Need more detailed quotes or examples",
+      "priority": "medium"
+    },
+    {
+      "field": "solutionOverview.keyFeatures",
+      "question": "Can you clarify any additional key features you expect?",
+      "reason": "Not fully defined in evidence",
+      "priority": "medium"
+    },
+    {
+      "field": "positioningAndMessaging",
+      "question": "What key messaging do you want to convey to your users?",
+      "reason": "Need more clarity on brand messaging",
+      "priority": "low"
+    }
+  ],
+  "generatedAt": "2025-12-04T11:51:49.945Z"
+}

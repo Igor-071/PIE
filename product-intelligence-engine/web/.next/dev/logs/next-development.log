@@ -1,0 +1,4 @@
+[12:13:14.205] Server  LOG     [jobStore] Cleaned up old job job-1764839309628-62xa27ert
+[12:13:14.343] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/igorkriasnik/work/PIE/product-intelligence-engine/web/app'
+[12:13:14.344] Server  ERROR    ⨯ "unhandledRejection:" Error: ENOENT: no such file or directory, scandir '/Users/igorkriasnik/work/PIE/product-intelligence-engine/web/app'
+[12:13:14.346] Server  ERROR    ⨯ "unhandledRejection: " Error: ENOENT: no such file or directory, scandir '/Users/igorkriasnik/work/PIE/product-intelligence-engine/web/app'

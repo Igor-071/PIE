@@ -1,0 +1,1 @@
+{"version":3,"file":"statePatternDetector.d.ts","sourceRoot":"","sources":["../../src/core/statePatternDetector.ts"],"names":[],"mappings":"AAIA,MAAM,WAAW,YAAY;IAC3B,IAAI,EAAE,MAAM,CAAC;IACb,MAAM,CAAC,EAAE,MAAM,EAAE,CAAC;IAClB,QAAQ,CAAC,EAAE,MAAM,CAAC;CACnB;AAED;;;;;GAKG;AACH,wBAAsB,mBAAmB,CACvC,QAAQ,EAAE,MAAM,EAChB,QAAQ,EAAE,MAAM,EAAE,GACjB,OAAO,CAAC,YAAY,EAAE,CAAC,CA+FzB"}

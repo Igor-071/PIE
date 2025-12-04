@@ -1,0 +1,57 @@
+# Cursor Rules
+
+These rules capture how the Aesthetica portal is organized and how we extend it safely. Share them with Cursor so future prompts align with the existing architecture and visual language.
+
+## Project Pillars
+- Vite + React 18 + TypeScript app in `src/`, styled with Tailwind + shadcn-ui. Global tokens (colors, radius, shadows, gradients) live in `src/index.css`; changes there propagate everywhere.
+- Supabase is the only backend. The generated client and types live in `src/integrations/supabase/`; never edit `client.ts` or `types.ts` manually.
+- Routing is handled with React Router 6. `App.tsx` wires providers (`QueryClientProvider`, `AuthProvider`, shadcn toasters) and defines every route. All new pages must be registered there, above the `"*"` catch-all.
+- There are two UX surfaces: the staff/clinic side wrapped in `AppLayout` and the patient side wrapped in `PatientLayout`. Pick the right layout plus a `ProtectedRoute` gate any time you add a new view.
+
+## Auth & Access Control
+- `AuthContext` (in `src/contexts/AuthContext.tsx`) is the single source of truth for Supabase user/session/role plus `signIn`, `signUp`, `signOut`. It resolves a custom `user_roles` table to map Supabase users to `AppRole`.
+- `ProtectedRoute` enforces auth + role gating. `requiredRoles` must be set for every private route. It also auto-redirects staff trying to open patient routes and vice versa.
+- When creating auth-aware components, always use the `useAuth` hook. Never call Supabase auth methods directly from UI.
+
+## Data Layer & Supabase
+- Use the exported `supabase` client and the generated `Tables`/`TablesInsert`/`TablesUpdate` helpers for type safety.
+- Prefer React Query for new async flows so we get caching/refetch for free. Existing screens sometimes call Supabase directly inside components—feel free to wrap these calls with `useQuery`/`useMutation` as you touch them.
+- Notifications live in the `notifications` table with realtime updates (`NotificationBell` subscribes via `supabase.channel("notifications-changes")`). Keep this pattern for any other realtime feeds.
+- Patient-side data (e.g. `PatientPortal`) is scoped by joining `patient_users -> patients -> treatments/implants`. Reuse that lookup to avoid leaking data between users.
+
+## UI System
+- All primitive UI comes from `src/components/ui/*` (shadcn). Extend existing variants (e.g. `Button`, `Card`) instead of recreating Tailwind styles in-place. Use the `cn` helper from `src/lib/utils.ts` for dynamic class names.
+- Typography defaults: headers use the serif family automatically (`@layer base` in `index.css`). Use `font-serif` for hero numbers/headlines, `font-light` for supporting copy to stay on brand.
+- Tailwind classes should honor the design tokens defined in CSS variables (`--shadow-soft`, `--glass-background`, gradients, etc.). If you need a new token, add it to `:root` and keep values in HSL.
+- Animations rely on `framer-motion` for page/section transitions. Follow the existing pattern of `initial/animate/transition` blocks and keep durations under 0.5s unless there is a strong reason.
+- Icons come from `lucide-react`. Size them with Tailwind (`w-4 h-4` etc.) and let colors inherit (e.g. `text-primary`).
+
+## Layout Patterns
+- `AppLayout` owns the sidebar navigation, top bar `NotificationBell`, and main container. Clinic pages render inside its `{children}` slot; keep pages themselves focused on content, not chrome.
+- `PatientLayout` renders the sticky glass header plus bottom nav. Patient pages should assume they are rendered within its `main` slot and leave room for the 64px nav by keeping bottom padding (`pb-20`).
+- Shared UI bits:
+  - `NotificationBell` + `NotificationsList` handle unread counts, Supabase realtime, and CRUD actions.
+  - `ProviderCard`, `TreatmentChart`, `PhotoGallery` are the building blocks for patient insights. Reuse them before creating similar widgets.
+
+## Forms & Feedback
+- Use shadcn `Input`, `Label`, `Textarea`, etc., and prefer `react-hook-form` + `zod` for new complex forms. Existing simple forms (e.g. `Login`) are controlled components; keep consistent validation/error messaging.
+- Toasts: staff UI uses the custom `useToast` hook (`<Toaster />`), while patient notifications also leverage `sonner` (`<Toaster as Sonner />`). Prefer the local `useToast` hook for lightweight feedback, `sonner` for cross-app alerts.
+
+## Styling & Accessibility
+- Keep components accessible: wire `aria` labels for icon-only buttons, ensure forms tie `Label` to `Input`.
+- Responsive behavior relies on Tailwind breakpoints. Use the same grid patterns (`md:grid-cols-2`, `lg:grid-cols-4`, etc.) to keep symmetry with existing pages.
+- Respect motion-reduced environments; avoid gratuitous continuous animations. Loading states should match `ProtectedRoute`’s centered spinner or `PatientPortal`’s text placeholder.
+
+## File Organization & Imports
+- Use the `@/*` alias (set in `tsconfig.json`) for imports inside `src`.
+- Keep feature code in `src/pages/*` unless it is reusable; shared UI lives in `src/components/`, data helpers/hooks in `src/hooks` or `src/lib`.
+- Do not commit secrets. Supabase keys must stay in `.env` and accessed via `import.meta.env.VITE_*`.
+
+## Extending the App
+- Adding a new clinic page: create it under `src/pages/`, build UI out of existing shadcn components, wrap with `AppLayout` + `ProtectedRoute` (staff roles). Register the route in `App.tsx` near similar sections.
+- Adding a patient view: follow the same flow but wrap with `PatientLayout` and require the `"patient"` role. Make sure queries are scoped to the authenticated patient id.
+- Adding Supabase tables: update the Supabase schema/migrations and re-run the generator rather than editing types manually.
+- Before shipping, run `npm run lint` + `npm run build`. Linting uses the flat ESLint config in `eslint.config.js`.
+
+Keep replies concise, reference files with backticked paths, and preserve the premium/glass aesthetic when suggesting style changes.
+
