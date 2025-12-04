@@ -1,5 +1,5 @@
 import { SectionPrompt, PromptContext, PromptResult } from "./promptTemplate.js";
-import { Assumptions } from "../../models/schema.js";
+import { Assumptions, PrdJson } from "../../models/schema.js";
 
 export const assumptionsPrompt: SectionPrompt = {
   name: "assumptions",
@@ -88,7 +88,7 @@ Based on the evidence above, generate realistic assumptions in all four categori
 
 function inferDomain(prdJson: PrdJson, evidence: any[]): string {
   // Infer domain from screens, data models, or evidence
-  const screenNames = prdJson.screens?.map(s => s.name.toLowerCase()).join(" ") || "";
+    const screenNames = prdJson.screens?.map((s: any) => s.name.toLowerCase()).join(" ") || "";
   
   if (screenNames.includes("patient") || screenNames.includes("clinic") || screenNames.includes("medical")) {
     return "Healthcare/Medical";
@@ -106,7 +106,7 @@ function inferDomain(prdJson: PrdJson, evidence: any[]): string {
 function extractRoles(prdJson: PrdJson): string {
   const roles: string[] = [];
   
-  prdJson.screens?.forEach(screen => {
+      prdJson.screens?.forEach((screen: any) => {
     const name = screen.name.toLowerCase();
     if (name.includes("admin") && !roles.includes("Admin")) roles.push("Admin");
     if (name.includes("patient") && !roles.includes("Patient")) roles.push("Patient");

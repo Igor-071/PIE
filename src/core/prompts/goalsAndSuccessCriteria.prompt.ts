@@ -1,5 +1,5 @@
 import { SectionPrompt, PromptContext, PromptResult } from "./promptTemplate.js";
-import { GoalsAndSuccessCriteria, SuccessMetric } from "../../models/schema.js";
+import { GoalsAndSuccessCriteria, SuccessMetric, PrdJson } from "../../models/schema.js";
 
 export const goalsAndSuccessCriteriaPrompt: SectionPrompt = {
   name: "goalsAndSuccessCriteria",
@@ -66,7 +66,7 @@ Generate primary goals and specific, measurable success metrics. Make KPIs reali
 };
 
 function inferDomain(prdJson: PrdJson): string {
-  const screenNames = prdJson.screens?.map(s => s.name.toLowerCase()).join(" ") || "";
+    const screenNames = prdJson.screens?.map((s: any) => s.name.toLowerCase()).join(" ") || "";
   if (screenNames.includes("patient") || screenNames.includes("clinic")) return "Healthcare";
   if (screenNames.includes("inventory")) return "Inventory Management";
   return "General";

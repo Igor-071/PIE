@@ -1,5 +1,5 @@
 import { SectionPrompt, PromptContext, PromptResult } from "./promptTemplate.js";
-import { RiskManagement, Risk } from "../../models/schema.js";
+import { RiskManagement, Risk, PrdJson } from "../../models/schema.js";
 
 export const riskManagementPrompt: SectionPrompt = {
   name: "riskManagement",
@@ -67,7 +67,7 @@ Identify realistic risks based on the project complexity, domain, and dependenci
 };
 
 function inferDomain(prdJson: PrdJson, evidence: any[]): string {
-  const screenNames = prdJson.screens?.map(s => s.name.toLowerCase()).join(" ") || "";
+    const screenNames = prdJson.screens?.map((s: any) => s.name.toLowerCase()).join(" ") || "";
   if (screenNames.includes("patient") || screenNames.includes("clinic")) return "Healthcare";
   if (screenNames.includes("order") || screenNames.includes("cart")) return "E-commerce";
   return "General";

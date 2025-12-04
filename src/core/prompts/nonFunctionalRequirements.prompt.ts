@@ -1,5 +1,5 @@
 import { SectionPrompt, PromptContext, PromptResult } from "./promptTemplate.js";
-import { NonFunctionalRequirement } from "../../models/schema.js";
+import { NonFunctionalRequirement, PrdJson } from "../../models/schema.js";
 
 export const nonFunctionalRequirementsPrompt: SectionPrompt = {
   name: "nonFunctionalRequirements",
@@ -51,7 +51,7 @@ Generate realistic NFRs with specific metrics. Consider domain requirements (hea
 };
 
 function inferDomain(prdJson: PrdJson): string {
-  const screenNames = prdJson.screens?.map(s => s.name.toLowerCase()).join(" ") || "";
+    const screenNames = prdJson.screens?.map((s: any) => s.name.toLowerCase()).join(" ") || "";
   if (screenNames.includes("patient") || screenNames.includes("clinic")) return "Healthcare";
   return "General";
 }

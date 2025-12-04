@@ -12,6 +12,7 @@ import { extractTier1 } from "./pie-core/core/tier1Extractor.js";
 import { collectEvidence } from "./pie-core/core/evidenceCollector.js";
 import { buildInitialPrdJsonFromTier1 } from "./pie-core/core/jsonMerger.js";
 import { runTier2Agent } from "./pie-core/core/tier2Agent.js";
+import { runTier3Agent } from "./pie-core/core/tier3Agent.js";
 import { writePrdArtifacts } from "./pie-core/core/prdGenerator.js";
 
 /**
@@ -29,6 +30,7 @@ export async function loadCoreModules() {
     collectEvidence,
     buildInitialPrdJsonFromTier1,
     runTier2Agent,
+    runTier3Agent,
     writePrdArtifacts,
   };
 

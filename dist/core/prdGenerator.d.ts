@@ -12,7 +12,9 @@ export interface PrdArtifactsOptions {
  * @param prd - The complete PRD JSON data
  * @param questions - Questions for the client
  * @param options - Output options including directory, project name, and template path
- * @returns Promise resolving to void
+ * @returns Promise resolving to an object with the markdown filename
  */
-export declare function writePrdArtifacts(prd: PrdJson, questions: QuestionsForClient, options: PrdArtifactsOptions): Promise<void>;
+export declare function writePrdArtifacts(prd: PrdJson, questions: QuestionsForClient, options: PrdArtifactsOptions): Promise<{
+    markdownFilename: string;
+}>;
 //# sourceMappingURL=prdGenerator.d.ts.map

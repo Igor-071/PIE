@@ -11,6 +11,7 @@ type JobStatus =
   | "unzipping"
   | "tier1"
   | "tier2"
+  | "tier3"
   | "generating"
   | "complete"
   | "error"

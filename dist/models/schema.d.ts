@@ -281,6 +281,17 @@ export interface PrdJson {
     solutionOverview?: SolutionOverview;
     customerProfiles?: CustomerProfiles;
     leanCanvas?: LeanCanvas;
+    goalsAndSuccessCriteria?: GoalsAndSuccessCriteria;
+    mvpScope?: MvpScope;
+    assumptions?: Assumptions;
+    dependencies?: Dependencies;
+    roleDefinition?: RoleDefinition;
+    productRequirements?: ProductRequirement[];
+    criticalUserFlows?: CriticalUserFlow[];
+    technicalRequirements?: TechnicalRequirement[];
+    nonFunctionalRequirements?: NonFunctionalRequirement[];
+    riskManagement?: RiskManagement;
+    openQuestions?: OpenQuestions;
     screens?: Screen[];
     components?: Component[];
     navigation?: Navigation[];
@@ -302,5 +313,133 @@ export interface ClientQuestion {
 export interface QuestionsForClient {
     questions: ClientQuestion[];
     generatedAt: string;
+}
+export interface SuccessMetric {
+    name: string;
+    description: string;
+    target?: string;
+    measurementMethod?: string;
+}
+export interface GoalsAndSuccessCriteria {
+    primaryGoals?: string[];
+    successMetrics?: SuccessMetric[];
+    kpis?: string[];
+}
+export interface MvpFeature {
+    name: string;
+    description: string;
+    priority: "high" | "medium" | "low";
+    screens?: string[];
+    dependencies?: string[];
+}
+export interface MvpScope {
+    phase?: string;
+    features?: MvpFeature[];
+    outOfScope?: string[];
+}
+export interface Assumptions {
+    technical?: string[];
+    operational?: string[];
+    financial?: string[];
+    legal?: string[];
+}
+export interface ServiceDependency {
+    name: string;
+    description: string;
+    impact?: string;
+}
+export interface OperationalDependency {
+    description: string;
+    requirement?: string;
+}
+export interface ContentDependency {
+    description: string;
+    source?: string;
+}
+export interface Dependencies {
+    service?: ServiceDependency[];
+    operational?: OperationalDependency[];
+    content?: ContentDependency[];
+}
+export interface AccessMatrix {
+    feature: string;
+    superAdmin?: string;
+    medicalProvider?: string;
+    reception?: string;
+    patient?: string;
+    [key: string]: string | undefined;
+}
+export interface RoleDefinition {
+    roles?: Array<{
+        id: string;
+        name: string;
+        description: string;
+    }>;
+    accessMatrix?: AccessMatrix[];
+}
+export interface AcceptanceCriteria {
+    id: string;
+    description: string;
+    testable?: boolean;
+}
+export interface ProductRequirement {
+    module: string;
+    objective: string;
+    features: Array<{
+        name: string;
+        description: string;
+        acceptanceCriteria: AcceptanceCriteria[];
+    }>;
+}
+export interface UserFlowStep {
+    stepNumber: number;
+    action: string;
+    screen?: string;
+    systemResponse?: string;
+    painPoint?: string;
+}
+export interface CriticalUserFlow {
+    id: string;
+    name: string;
+    role: string;
+    goal: string;
+    steps: UserFlowStep[];
+}
+export interface Risk {
+    id: string;
+    description: string;
+    category: "operational" | "technical" | "security" | "legal" | "financial";
+    probability: "low" | "medium" | "high";
+    impact: "low" | "medium" | "high" | "critical";
+    mitigationStrategy?: string;
+}
+export interface RiskManagement {
+    risks?: Risk[];
+}
+export interface TechnicalRequirement {
+    category: "infrastructure" | "architecture" | "dataManagement" | "integration";
+    requirements: string[];
+    details?: Record<string, string>;
+}
+export interface NonFunctionalRequirement {
+    category: "performance" | "security" | "usability" | "reliability" | "scalability";
+    requirements: string[];
+    metrics?: Record<string, string>;
+}
+export interface OpenQuestion {
+    id: string;
+    question: string;
+    category?: "client" | "technical" | "operational" | "legal";
+    priority?: "high" | "medium" | "low";
+    context?: string;
+}
+export interface OpenQuestions {
+    questions?: OpenQuestion[];
+    decisions?: Array<{
+        id: string;
+        decision: string;
+        rationale?: string;
+        date?: string;
+    }>;
 }
 //# sourceMappingURL=schema.d.ts.map

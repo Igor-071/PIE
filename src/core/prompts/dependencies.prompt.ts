@@ -1,5 +1,5 @@
 import { SectionPrompt, PromptContext, PromptResult } from "./promptTemplate.js";
-import { Dependencies } from "../../models/schema.js";
+import { Dependencies, PrdJson } from "../../models/schema.js";
 
 export const dependenciesPrompt: SectionPrompt = {
   name: "dependencies",
@@ -77,7 +77,7 @@ Identify all dependencies across the three categories. Be specific about what ex
 
 function extractRoles(prdJson: PrdJson): string {
   const roles: string[] = [];
-  prdJson.screens?.forEach(screen => {
+    prdJson.screens?.forEach((screen: any) => {
     const name = screen.name.toLowerCase();
     if (name.includes("admin") && !roles.includes("Admin")) roles.push("Admin");
     if (name.includes("patient") && !roles.includes("Patient")) roles.push("Patient");

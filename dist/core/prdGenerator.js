@@ -8,7 +8,7 @@ import path from "path";
  * @param prd - The complete PRD JSON data
  * @param questions - Questions for the client
  * @param options - Output options including directory, project name, and template path
- * @returns Promise resolving to void
+ * @returns Promise resolving to an object with the markdown filename
  */
 export async function writePrdArtifacts(prd, questions, options) {
     // Ensure output directory exists
@@ -26,11 +26,13 @@ export async function writePrdArtifacts(prd, questions, options) {
         .toLowerCase()
         .replace(/\s+/g, "-")
         .replace(/[^a-z0-9-]/g, "");
-    const markdownPath = path.join(options.outputDir, `PRD_${sanitizedProjectName}.md`);
+    const markdownFilename = `PRD_${sanitizedProjectName}.md`;
+    const markdownPath = path.join(options.outputDir, markdownFilename);
     await fs.writeFile(markdownPath, markdownContent, "utf-8");
     console.log(`PRD written to: ${markdownPath}`);
     console.log(`Structured JSON written to: ${jsonPath}`);
     console.log(`Questions written to: ${questionsPath}`);
+    return { markdownFilename };
 }
 /**
  * Generates a comprehensive markdown PRD from the JSON data
@@ -224,7 +226,355 @@ async function generatePrdMarkdown(prd, options) {
     // ============================================================================
     if (prd.competitiveAnalysis) {
         markdown += `## 7. Competitive Analysis\n\n`;
-        markdown += `${prd.competitiveAnalysis}\n\n`;
+        if (typeof prd.competitiveAnalysis === "string") {
+            markdown += `${prd.competitiveAnalysis}\n\n`;
+        }
+        else {
+            if (prd.competitiveAnalysis.marketCategory) {
+                markdown += `### Market Category\n${prd.competitiveAnalysis.marketCategory}\n\n`;
+            }
+            if (prd.competitiveAnalysis.competitors && prd.competitiveAnalysis.competitors.length > 0) {
+                markdown += `### Competitors\n`;
+                prd.competitiveAnalysis.competitors.forEach((comp) => {
+                    markdown += `- ${comp}\n`;
+                });
+                markdown += `\n`;
+            }
+            if (prd.competitiveAnalysis.positioningSummary) {
+                markdown += `### Positioning Summary\n${prd.competitiveAnalysis.positioningSummary}\n\n`;
+            }
+        }
+    }
+    // ============================================================================
+    // 8. GOALS & SUCCESS CRITERIA
+    // ============================================================================
+    if (prd.goalsAndSuccessCriteria) {
+        markdown += `## 8. Goals & Success Criteria\n\n`;
+        if (prd.goalsAndSuccessCriteria.primaryGoals && prd.goalsAndSuccessCriteria.primaryGoals.length > 0) {
+            markdown += `### Primary Goals\n\n`;
+            prd.goalsAndSuccessCriteria.primaryGoals.forEach((goal, index) => {
+                markdown += `${index + 1}. ${goal}\n`;
+            });
+            markdown += `\n`;
+        }
+        if (prd.goalsAndSuccessCriteria.successMetrics && prd.goalsAndSuccessCriteria.successMetrics.length > 0) {
+            markdown += `### Success Metrics (KPIs)\n\n`;
+            markdown += `| Metric | Description | Target | Measurement Method |\n`;
+            markdown += `|--------|-------------|--------|---------------------|\n`;
+            prd.goalsAndSuccessCriteria.successMetrics.forEach((metric) => {
+                markdown += `| ${metric.name} | ${metric.description} | ${metric.target || "-"} | ${metric.measurementMethod || "-"} |\n`;
+            });
+            markdown += `\n`;
+        }
+        if (prd.goalsAndSuccessCriteria.kpis && prd.goalsAndSuccessCriteria.kpis.length > 0) {
+            markdown += `### Key Performance Indicators\n\n`;
+            prd.goalsAndSuccessCriteria.kpis.forEach((kpi) => {
+                markdown += `- ${kpi}\n`;
+            });
+            markdown += `\n`;
+        }
+    }
+    // ============================================================================
+    // 9. MVP SCOPE
+    // ============================================================================
+    if (prd.mvpScope) {
+        markdown += `## 9. MVP Scope (Phase ${prd.mvpScope.phase || "1"})\n\n`;
+        if (prd.mvpScope.features && prd.mvpScope.features.length > 0) {
+            markdown += `### Features Included\n\n`;
+            prd.mvpScope.features.forEach((feature) => {
+                markdown += `#### ${feature.name}\n\n`;
+                markdown += `**Description:** ${feature.description}\n\n`;
+                markdown += `**Priority:** ${feature.priority}\n\n`;
+                if (feature.screens && feature.screens.length > 0) {
+                    markdown += `**Screens:** ${feature.screens.join(", ")}\n\n`;
+                }
+                if (feature.dependencies && feature.dependencies.length > 0) {
+                    markdown += `**Dependencies:** ${feature.dependencies.join(", ")}\n\n`;
+                }
+            });
+        }
+        if (prd.mvpScope.outOfScope && prd.mvpScope.outOfScope.length > 0) {
+            markdown += `### Out of Scope\n\n`;
+            prd.mvpScope.outOfScope.forEach((item) => {
+                markdown += `- ${item}\n`;
+            });
+            markdown += `\n`;
+        }
+    }
+    // ============================================================================
+    // 10. ASSUMPTIONS
+    // ============================================================================
+    if (prd.assumptions) {
+        markdown += `## 10. Assumptions\n\n`;
+        if (prd.assumptions.technical && prd.assumptions.technical.length > 0) {
+            markdown += `### Technical Assumptions\n\n`;
+            prd.assumptions.technical.forEach((assumption) => {
+                markdown += `- ${assumption}\n`;
+            });
+            markdown += `\n`;
+        }
+        if (prd.assumptions.operational && prd.assumptions.operational.length > 0) {
+            markdown += `### Operational Assumptions\n\n`;
+            prd.assumptions.operational.forEach((assumption) => {
+                markdown += `- ${assumption}\n`;
+            });
+            markdown += `\n`;
+        }
+        if (prd.assumptions.financial && prd.assumptions.financial.length > 0) {
+            markdown += `### Financial Assumptions\n\n`;
+            prd.assumptions.financial.forEach((assumption) => {
+                markdown += `- ${assumption}\n`;
+            });
+            markdown += `\n`;
+        }
+        if (prd.assumptions.legal && prd.assumptions.legal.length > 0) {
+            markdown += `### Legal/Compliance Assumptions\n\n`;
+            prd.assumptions.legal.forEach((assumption) => {
+                markdown += `- ${assumption}\n`;
+            });
+            markdown += `\n`;
+        }
+    }
+    // ============================================================================
+    // 11. DEPENDENCIES
+    // ============================================================================
+    if (prd.dependencies) {
+        markdown += `## 11. Dependencies\n\n`;
+        if (prd.dependencies.service && prd.dependencies.service.length > 0) {
+            markdown += `### Service Dependencies\n\n`;
+            prd.dependencies.service.forEach((dep) => {
+                markdown += `#### ${dep.name}\n\n`;
+                markdown += `**Description:** ${dep.description}\n\n`;
+                if (dep.impact) {
+                    markdown += `**Impact:** ${dep.impact}\n\n`;
+                }
+            });
+        }
+        if (prd.dependencies.operational && prd.dependencies.operational.length > 0) {
+            markdown += `### Operational Dependencies\n\n`;
+            prd.dependencies.operational.forEach((dep) => {
+                markdown += `- ${dep.description}`;
+                if (dep.requirement) {
+                    markdown += ` (Requirement: ${dep.requirement})`;
+                }
+                markdown += `\n`;
+            });
+            markdown += `\n`;
+        }
+        if (prd.dependencies.content && prd.dependencies.content.length > 0) {
+            markdown += `### Content & Legal Dependencies\n\n`;
+            prd.dependencies.content.forEach((dep) => {
+                markdown += `- ${dep.description}`;
+                if (dep.source) {
+                    markdown += ` (Source: ${dep.source})`;
+                }
+                markdown += `\n`;
+            });
+            markdown += `\n`;
+        }
+    }
+    // ============================================================================
+    // 12. ROLE DEFINITION / ACCESS MODEL
+    // ============================================================================
+    if (prd.roleDefinition) {
+        markdown += `## 12. Role Definition / Access Model\n\n`;
+        if (prd.roleDefinition.roles && prd.roleDefinition.roles.length > 0) {
+            markdown += `### Role Definitions\n\n`;
+            prd.roleDefinition.roles.forEach((role) => {
+                markdown += `#### ${role.name}\n\n`;
+                markdown += `**ID:** ${role.id}\n\n`;
+                markdown += `**Description:** ${role.description}\n\n`;
+            });
+        }
+        if (prd.roleDefinition.accessMatrix && prd.roleDefinition.accessMatrix.length > 0) {
+            markdown += `### Access Matrix\n\n`;
+            // Get all unique role names from access matrix
+            const roleColumns = new Set();
+            prd.roleDefinition.accessMatrix.forEach((matrix) => {
+                Object.keys(matrix).forEach((key) => {
+                    if (key !== "feature") {
+                        roleColumns.add(key);
+                    }
+                });
+            });
+            const roleHeaders = Array.from(roleColumns);
+            markdown += `| Feature | ${roleHeaders.join(" | ")} |\n`;
+            markdown += `|---------|${roleHeaders.map(() => "---").join("|")}|\n`;
+            prd.roleDefinition.accessMatrix.forEach((matrix) => {
+                const feature = matrix.feature || "-";
+                const cells = roleHeaders.map((role) => matrix[role] || "-");
+                markdown += `| ${feature} | ${cells.join(" | ")} |\n`;
+            });
+            markdown += `\n`;
+        }
+    }
+    // ============================================================================
+    // 13. PRODUCT REQUIREMENTS / ACCEPTANCE CRITERIA
+    // ============================================================================
+    if (prd.productRequirements && prd.productRequirements.length > 0) {
+        markdown += `## 13. Product Requirements / Acceptance Criteria\n\n`;
+        prd.productRequirements.forEach((req) => {
+            markdown += `### Module: ${req.module}\n\n`;
+            markdown += `**Objective:** ${req.objective}\n\n`;
+            if (req.features && req.features.length > 0) {
+                req.features.forEach((feature) => {
+                    markdown += `#### Feature: ${feature.name}\n\n`;
+                    markdown += `**Description:** ${feature.description}\n\n`;
+                    if (feature.acceptanceCriteria && feature.acceptanceCriteria.length > 0) {
+                        markdown += `**Acceptance Criteria:**\n\n`;
+                        markdown += `| ID | Criterion | Testable |\n`;
+                        markdown += `|----|-----------|----------|\n`;
+                        feature.acceptanceCriteria.forEach((ac) => {
+                            markdown += `| ${ac.id} | ${ac.description} | ${ac.testable ? "✓" : "-"} |\n`;
+                        });
+                        markdown += `\n`;
+                    }
+                });
+            }
+        });
+    }
+    // ============================================================================
+    // 14. CRITICAL USER FLOWS
+    // ============================================================================
+    if (prd.criticalUserFlows && prd.criticalUserFlows.length > 0) {
+        markdown += `## 14. User Interaction and Design\n\n`;
+        markdown += `### Critical User Flows\n\n`;
+        prd.criticalUserFlows.forEach((flow) => {
+            markdown += `#### Flow: ${flow.name}\n\n`;
+            markdown += `**Role:** ${flow.role}\n\n`;
+            markdown += `**Goal:** ${flow.goal}\n\n`;
+            if (flow.steps && flow.steps.length > 0) {
+                markdown += `**Steps:**\n\n`;
+                flow.steps.forEach((step) => {
+                    markdown += `${step.stepNumber}. **${step.action}**`;
+                    if (step.screen) {
+                        markdown += ` → ${step.screen}`;
+                    }
+                    markdown += `\n`;
+                    if (step.systemResponse) {
+                        markdown += `   - System: ${step.systemResponse}\n`;
+                    }
+                    if (step.painPoint) {
+                        markdown += `   - Pain Point: ${step.painPoint}\n`;
+                    }
+                    markdown += `\n`;
+                });
+            }
+        });
+    }
+    // ============================================================================
+    // 15. TECHNICAL REQUIREMENTS
+    // ============================================================================
+    if (prd.technicalRequirements && prd.technicalRequirements.length > 0) {
+        markdown += `## 15. Technical Requirements\n\n`;
+        const categories = ["infrastructure", "architecture", "dataManagement", "integration"];
+        categories.forEach((category) => {
+            const reqs = prd.technicalRequirements.filter(r => r.category === category);
+            if (reqs.length > 0) {
+                const categoryName = category.charAt(0).toUpperCase() + category.slice(1).replace(/([A-Z])/g, " $1");
+                markdown += `### ${categoryName}\n\n`;
+                reqs.forEach((req) => {
+                    if (req.requirements && req.requirements.length > 0) {
+                        req.requirements.forEach((r) => {
+                            markdown += `- ${r}\n`;
+                        });
+                    }
+                    if (req.details && Object.keys(req.details).length > 0) {
+                        Object.entries(req.details).forEach(([key, value]) => {
+                            markdown += `  - ${key}: ${value}\n`;
+                        });
+                    }
+                });
+                markdown += `\n`;
+            }
+        });
+    }
+    // ============================================================================
+    // 16. NON-FUNCTIONAL REQUIREMENTS
+    // ============================================================================
+    if (prd.nonFunctionalRequirements && prd.nonFunctionalRequirements.length > 0) {
+        markdown += `## 16. Non-Functional Requirements (NFRs)\n\n`;
+        const categories = ["performance", "security", "usability", "reliability", "scalability"];
+        categories.forEach((category) => {
+            const reqs = prd.nonFunctionalRequirements.filter(r => r.category === category);
+            if (reqs.length > 0) {
+                const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+                markdown += `### ${categoryName}\n\n`;
+                reqs.forEach((req) => {
+                    if (req.requirements && req.requirements.length > 0) {
+                        req.requirements.forEach((r) => {
+                            markdown += `- ${r}\n`;
+                        });
+                    }
+                    if (req.metrics && Object.keys(req.metrics).length > 0) {
+                        markdown += `  **Metrics:**\n`;
+                        Object.entries(req.metrics).forEach(([key, value]) => {
+                            markdown += `  - ${key}: ${value}\n`;
+                        });
+                    }
+                });
+                markdown += `\n`;
+            }
+        });
+    }
+    // ============================================================================
+    // 17. RISK MANAGEMENT
+    // ============================================================================
+    if (prd.riskManagement && prd.riskManagement.risks && prd.riskManagement.risks.length > 0) {
+        markdown += `## 17. Risk Management\n\n`;
+        const categories = ["operational", "technical", "security", "legal", "financial"];
+        categories.forEach((category) => {
+            const risks = prd.riskManagement.risks.filter(r => r.category === category);
+            if (risks.length > 0) {
+                const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+                markdown += `### ${categoryName} Risks\n\n`;
+                markdown += `| Risk | Probability | Impact | Mitigation Strategy |\n`;
+                markdown += `|------|-------------|--------|---------------------|\n`;
+                risks.forEach((risk) => {
+                    markdown += `| ${risk.description} | ${risk.probability} | ${risk.impact} | ${risk.mitigationStrategy || "-"} |\n`;
+                });
+                markdown += `\n`;
+            }
+        });
+    }
+    // ============================================================================
+    // 18. OPEN QUESTIONS & DECISIONS
+    // ============================================================================
+    if (prd.openQuestions) {
+        markdown += `## 18. Open Questions & Decisions\n\n`;
+        if (prd.openQuestions.questions && prd.openQuestions.questions.length > 0) {
+            markdown += `### Open Questions\n\n`;
+            const byCategory = {};
+            prd.openQuestions.questions.forEach((q) => {
+                const cat = q.category || "general";
+                if (!byCategory[cat])
+                    byCategory[cat] = [];
+                byCategory[cat].push(q);
+            });
+            Object.entries(byCategory).forEach(([category, questions]) => {
+                markdown += `#### ${category.charAt(0).toUpperCase() + category.slice(1)} Questions\n\n`;
+                questions.forEach((q) => {
+                    markdown += `- **[${q.priority || "medium"}]** ${q.question}`;
+                    if (q.context) {
+                        markdown += `\n  - Context: ${q.context}`;
+                    }
+                    markdown += `\n`;
+                });
+                markdown += `\n`;
+            });
+        }
+        if (prd.openQuestions.decisions && prd.openQuestions.decisions.length > 0) {
+            markdown += `### Decisions\n\n`;
+            prd.openQuestions.decisions.forEach((decision) => {
+                markdown += `#### ${decision.decision}\n\n`;
+                if (decision.rationale) {
+                    markdown += `**Rationale:** ${decision.rationale}\n\n`;
+                }
+                if (decision.date) {
+                    markdown += `**Date:** ${decision.date}\n\n`;
+                }
+            });
+        }
     }
     // ============================================================================
     // 8. SCREENS & USER INTERFACE
@@ -324,9 +674,19 @@ async function generatePrdMarkdown(prd, options) {
         markdown += `---\n\n## Appendix: AI Extraction Metadata\n\n`;
         markdown += `**Extracted At:** ${new Date(prd.aiMetadata.extractedAt || Date.now()).toLocaleString()}\n\n`;
         if (prd.aiMetadata.extractionNotes) {
-            markdown += `**Extraction Notes:** ${prd.aiMetadata.extractionNotes}\n\n`;
+            const notes = Array.isArray(prd.aiMetadata.extractionNotes)
+                ? prd.aiMetadata.extractionNotes
+                : [prd.aiMetadata.extractionNotes];
+            markdown += `**Extraction Notes:** ${notes.join("; ")}\n\n`;
         }
     }
+    // ============================================================================
+    // CHANGE LOG
+    // ============================================================================
+    markdown += `---\n\n## Change Log\n\n`;
+    markdown += `| Version | Date | Changes |\n`;
+    markdown += `|---------|------|---------|\n`;
+    markdown += `| ${prd.project?.version || "1.0.0"} | ${new Date(prd.project?.createdAt || Date.now()).toLocaleDateString()} | Initial PRD |\n`;
     return markdown;
 }
 //# sourceMappingURL=prdGenerator.js.map

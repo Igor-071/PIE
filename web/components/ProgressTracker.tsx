@@ -12,6 +12,7 @@ const statusLabels: Record<string, string> = {
   unzipping: "Unzipping Repository",
   tier1: "Extracting Technical Data",
   tier2: "Running AI Analysis",
+  tier3: "Generating Detailed Requirements",
   generating: "Generating PRD",
   complete: "Complete",
   error: "Error",
@@ -42,6 +43,12 @@ const steps: StepInfo[] = [
     label: "Tier 2: AI Strategy Analysis",
     description: "Using AI to analyze business strategy, target audience, positioning, and value proposition",
     icon: "🤖",
+  },
+  {
+    key: "tier3",
+    label: "Tier 3: Detailed Requirements",
+    description: "Generating assumptions, dependencies, risk management, acceptance criteria, and technical requirements",
+    icon: "⚙️",
   },
   {
     key: "generating",

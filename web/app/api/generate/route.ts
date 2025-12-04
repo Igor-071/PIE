@@ -190,6 +190,7 @@ async function processJob(
     collectEvidence,
     buildInitialPrdJsonFromTier1,
     runTier2Agent,
+    runTier3Agent,
     writePrdArtifacts,
   } = coreModules;
     const tmpDir = path.join(process.cwd(), "tmp", "uploads");
@@ -305,7 +306,7 @@ async function processJob(
       // Step 5: Run Tier 2 agent
       updateJob(jobId, {
         status: "tier2",
-        progress: 60,
+        progress: 50,
         message: "Running AI agent (Tier 2)...",
       });
 
@@ -313,14 +314,36 @@ async function processJob(
         return;
       }
 
-      const result = await runTier2Agent(baseJson, evidence, {
+      const tier2Result = await runTier2Agent(baseJson, evidence, {
         maxQuestions: 7,
       });
 
-      // Step 6: Write artifacts
+      // Step 6: Run Tier 3 agent
+      updateJob(jobId, {
+        status: "tier3",
+        progress: 70,
+        message: "Running Tier 3 agent (detailed sections)...",
+      });
+
+      if (isJobCancelled(jobId)) {
+        return;
+      }
+
+      const tier3Result = await runTier3Agent(tier2Result.updatedJson, evidence, tier1);
+
+      // Step 7: Merge questions from Tier 2 and Tier 3
+      const allQuestions = {
+        questions: [
+          ...tier2Result.questionsForClient.questions,
+          ...tier3Result.questions.questions,
+        ],
+        generatedAt: new Date().toISOString(),
+      };
+
+      // Step 8: Write artifacts
       updateJob(jobId, {
         status: "generating",
-        progress: 80,
+        progress: 90,
         message: "Generating PRD documents...",
       });
 
@@ -329,7 +352,7 @@ async function processJob(
       }
 
       outputDir = path.join(process.cwd(), "tmp", "output", jobId);
-      const artifacts = await writePrdArtifacts(result.updatedJson, result.questionsForClient, {
+      const artifacts = await writePrdArtifacts(tier3Result.updatedJson, allQuestions, {
         outputDir,
         projectName: tier1.projectName,
       });

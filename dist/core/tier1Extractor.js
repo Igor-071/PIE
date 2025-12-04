@@ -6,7 +6,6 @@ import { detectApiEndpoints } from "./apiDetector.js";
 import { detectDataModels } from "./dataModelDetector.js";
 import { detectStatePatterns } from "./statePatternDetector.js";
 import { detectEvents } from "./eventDetector.js";
-import { generateId, generateIdFromString, inferScreenPurpose } from "./utils.js";
 /**
  * Extracts project name from package.json, README, or directory name
  * @param repoPath - Path to the repository directory
@@ -58,9 +57,9 @@ async function extractProjectName(repoPath, allFiles) {
         .join(" ");
 }
 /**
- * Extracts Tier 1 technical data from a repository and returns PrdJson
+ * Extracts Tier 1 technical data from a repository
  * @param repoPath - Path to the unzipped repository directory
- * @returns Promise resolving to PrdJson
+ * @returns Promise resolving to Tier1Data
  */
 export async function extractTier1(repoPath) {
     // Scan the repository for files
@@ -68,7 +67,7 @@ export async function extractTier1(repoPath) {
     // Extract project name from package.json, README, or directory
     const projectName = await extractProjectName(repoPath, scanned.allFiles);
     // Build screens from discovered page/screen files
-    const screens = scanned.screens.map((filePath) => {
+    const screens = scanned.screens.map((filePath, index) => {
         const name = path.basename(filePath, path.extname(filePath));
         // Detect framework from file path or extension
         let framework;
@@ -82,23 +81,16 @@ export async function extractTier1(repoPath) {
             framework = "react-native";
         }
         return {
-            id: generateIdFromString(filePath),
+            id: `screen-${index}`,
             name,
             path: filePath,
-            purpose: inferScreenPurpose(name, filePath),
             framework,
         };
     });
-    // Extract navigation structure
-    const navigation = await extractNavigation(repoPath, scanned.screens);
     // Detect API endpoints from both route files and code calls
     const apiEndpoints = await detectApiEndpoints(repoPath, scanned.allFiles);
     // Detect data models from TypeScript interfaces, types, and schemas
-    const dataModel = await detectDataModels(repoPath, scanned.allFiles);
-    // Detect state management patterns
-    const statePatterns = await detectStatePatterns(repoPath, scanned.allFiles);
-    // Detect events and user interactions
-    const events = await detectEvents(repoPath, scanned.screens);
+    const dataModels = await detectDataModels(repoPath, scanned.allFiles);
     // Detect stack from file patterns
     const stackDetected = [];
     if (scanned.allFiles.some((f) => f.includes("/pages/") || f.includes("/app/"))) {
@@ -110,53 +102,31 @@ export async function extractTier1(repoPath) {
     if (scanned.allFiles.some((f) => f.endsWith(".tsx") || f.endsWith(".jsx"))) {
         stackDetected.push("react");
     }
+    if (scanned.dataModelFiles.some((f) => f.includes("schema.prisma"))) {
+        stackDetected.push("prisma");
+    }
+    // Extract navigation structure
+    const navigation = await extractNavigation(repoPath, scanned.screens);
+    // Detect state management patterns
+    const statePatterns = await detectStatePatterns(repoPath, scanned.allFiles);
+    // Detect events and user interactions
+    const events = await detectEvents(repoPath, scanned.screens);
     // Build AI metadata
     const aiMetadata = {
         extractedAt: new Date().toISOString(),
         stackDetected,
-        extractionNotes: [
-            `Scanned ${scanned.allFiles.length} files`,
-            `Found ${screens.length} screens/pages`,
-            `Found ${apiEndpoints.length} API endpoints`,
-            `Found ${Object.keys(dataModel || {}).length} data model entities`,
-            `Found ${navigation.length} navigation items`,
-            `Found ${statePatterns.length} state management patterns`,
-            `Found ${events.length} event handlers`,
-        ].join("; "),
+        missingPieces: [],
+        extractionNotes: `Scanned ${scanned.allFiles.length} files; Found ${screens.length} screens/pages; Found ${apiEndpoints.length} API endpoints; Found ${dataModels.length} data model files; Found ${navigation.length} navigation items; Found ${statePatterns.length} state management patterns; Found ${events.length} event handlers`,
     };
-    // Build state from detected patterns
-    const state = statePatterns.length > 0
-        ? {
-            global: {
-                stateManagement: statePatterns.map((p) => ({
-                    type: p.type,
-                    stores: p.stores,
-                })),
-            },
-        }
-        : undefined;
-    // Return complete PrdJson structure
     return {
-        project: {
-            id: generateId(),
-            name: projectName,
-            version: "1.0.0",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-        },
+        projectName,
         screens,
         navigation,
-        api: apiEndpoints,
-        dataModel,
-        state,
+        apiEndpoints,
+        dataModels: dataModels,
+        statePatterns,
         events,
         aiMetadata,
-        // Initialize other sections as empty/undefined - will be filled by Tier 2
-        brandFoundations: undefined,
-        targetAudience: undefined,
-        problemDefinition: undefined,
-        solutionOverview: undefined,
-        leanCanvas: undefined,
     };
 }
 //# sourceMappingURL=tier1Extractor.js.map
