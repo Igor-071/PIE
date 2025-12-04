@@ -32,10 +32,10 @@ npm run build
    ```
 
 2. Edit `.env` and add your OpenAI API key:
-   ```
+```
    OPENAI_API_KEY=sk-your_actual_api_key_here
    OPENAI_MODEL=gpt-4-turbo
-   ```
+```
 
    Get your API key from: https://platform.openai.com/api-keys
 
