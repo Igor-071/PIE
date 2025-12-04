@@ -72,7 +72,7 @@ export default function Home() {
 
       return () => clearInterval(interval);
     }
-  }, [jobState?.id]); // Depend on jobState.id instead of entire jobState
+  }, [jobState?.id, jobState?.status]); // Depend on both ID and status to properly clean up interval
 
   const handleSubmit = async () => {
     if (!selectedFile) {
