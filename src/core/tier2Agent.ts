@@ -152,6 +152,53 @@ Transform technical code analysis and evidence documents into a rich, strategic 
 3. **Think Like a PM**: Consider the business model, target users, and competitive positioning
 4. **Fill Everything Possible**: Better to make educated guesses than leave fields empty
 
+5. **Write with Depth and Detail**: 
+   - ALL strategic text fields should be 2+ complete sentences minimum
+   - Mission: 2-3 sentences explaining WHY the company exists
+   - Vision: 3-4 sentences painting a vivid future picture
+   - Pain points: ALWAYS write as first-person quotes with specific details
+   - Personas: Create realistic characters (name, age, backstory)
+   - Value propositions: Focus on measurable outcomes, not just features
+
+6. **Descriptive Quality Standards**:
+   
+   **MISSION** - Must answer (2-3 sentences):
+   • WHY does this company exist? (purpose)
+   • WHAT problem are they passionate about solving?
+   • WHO specifically do they serve?
+   Example: "We exist to eliminate inventory chaos for growing e-commerce businesses. By automating tedious stock tracking and providing real-time insights, we empower operations teams to focus on strategic growth instead of manual spreadsheets."
+   
+   **VISION** - Must describe (3-4 sentences):
+   • The future state when the product succeeds
+   • Impact on users, industry, or world
+   • Aspirational but believable
+   Example: "We envision a world where every business has enterprise-grade inventory intelligence at their fingertips. A world where stockouts are predicted and prevented automatically, where supply chains are transparent and resilient, and where operations teams focus on strategy rather than firefighting crises."
+   
+   **PAIN POINTS** - Must be (3-5 quotes per persona):
+   • First-person quotes ("I struggle with...")
+   • Specific and detailed (include numbers, timeframes, specific scenarios)
+   • Emotionally authentic (frustration, stress, impact)
+   Bad: "Managing inventory is difficult"
+   Good: "I waste 3-4 hours every Monday reconciling inventory across our warehouse spreadsheet, Shopify admin, and Amazon Seller Central. By the time I finish, the numbers are already out of date."
+   
+   **PERSONAS** - Must include:
+   • Realistic first name + specific role (e.g., "Marcus Chen - Operations Director")
+   • Age, location, company context, years of experience, education
+   • Personality traits, values, work style, tech comfort level
+   • 3-4 specific, measurable goals
+   Example demographics: "38 years old, based in Austin, TX. Manages operations for a fast-growing DTC furniture brand ($5M ARR, team of 12). Has 7 years of e-commerce experience, started as warehouse associate and worked up to director."
+   
+   **VALUE PROPOSITION** - Must communicate (2-3 sentences):
+   • Problem being solved (emotional hook)
+   • How it's solved (mechanism)
+   • Quantified benefit (numbers, time saved, cost reduced)
+   Formula: [Problem solved] + [How it works] + [Quantified benefit]
+   Bad: "Automated inventory management system"
+   Good: "Stop losing sales to stockouts and cash to overstock. Our AI-powered platform predicts demand, automates reordering, and provides real-time visibility - saving operations teams 10+ hours per week while cutting inventory costs by 23%."
+
+7. **The Authenticity Test**:
+   Before finalizing each strategic field, ask: "Would a real company publish this on their About page or marketing site?" If it sounds like placeholder text or generic corporate jargon, rewrite with more specificity, emotion, and concrete details. Aim for authentic, compelling content that resonates with real users.
+
 ## Custom Schema Fields to Populate
 
 ### brandFoundations
@@ -392,7 +439,7 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
               { role: "user", content: userMessage },
             ],
             response_format: { type: "json_object" },
-            temperature: 0.6, // Balanced for creative strategic content with faster response
+            temperature: 0.7, // Increased for more descriptive, creative strategic content
           });
           const elapsed = Date.now() - apiCallStartTime;
           console.log(`[Tier2Agent] API call completed successfully in ${elapsed}ms`);
