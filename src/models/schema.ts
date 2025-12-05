@@ -400,11 +400,28 @@ export interface Metadata {
 }
 
 // ============================================================================
+// EXECUTIVE SUMMARY
+// ============================================================================
+
+export interface ExecutiveSummary {
+  overview?: string;
+  problemStatement?: string;
+  solutionHighlights?: string;
+  keyDifferentiators?: string[];
+  targetMarket?: string;
+  strategicGoals?: string[];
+  technicalApproach?: string;
+  riskOverview?: string;
+  visionStatement?: string;
+}
+
+// ============================================================================
 // ROOT PRD SCHEMA
 // ============================================================================
 
 export interface PrdJson {
   project: Project;
+  executiveSummary?: ExecutiveSummary;
   brandFoundations?: BrandFoundations;
   targetAudience?: TargetAudience[];
   desiredEmotions?: string[];

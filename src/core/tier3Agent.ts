@@ -12,6 +12,9 @@ import { userFlowsPrompt } from "./prompts/userFlows.prompt.js";
 import { technicalRequirementsPrompt } from "./prompts/technicalRequirements.prompt.js";
 import { nonFunctionalRequirementsPrompt } from "./prompts/nonFunctionalRequirements.prompt.js";
 import { openQuestionsPrompt } from "./prompts/openQuestions.prompt.js";
+import { executiveSummaryPrompt } from "./prompts/executiveSummary.prompt.js";
+import { competitiveIntelligencePrompt } from "./prompts/competitiveIntelligence.prompt.js";
+import { implementationRoadmapPrompt } from "./prompts/implementationRoadmap.prompt.js";
 
 export interface Tier3AgentOptions {
   model?: string;
@@ -24,6 +27,7 @@ export interface Tier3AgentOptions {
  * Tier 3 Agent: Generates advanced PRD sections using specialized prompts
  * 
  * This agent runs after Tier 2 and generates:
+ * - Executive Summary (NEW - Phase 1)
  * - Goals & Success Criteria
  * - MVP Scope
  * - Assumptions
@@ -34,6 +38,8 @@ export interface Tier3AgentOptions {
  * - Technical Requirements
  * - Non-Functional Requirements
  * - Risk Management
+ * - Competitive Intelligence (NEW - Phase 1)
+ * - Implementation Roadmap (NEW - Phase 1)
  * - Open Questions & Decisions
  */
 export async function runTier3Agent(
@@ -52,6 +58,8 @@ export async function runTier3Agent(
   };
 
   // Define all prompts to execute
+  // Note: Executive summary runs first but synthesizes all sections,
+  // so it will reference what exists from Tier 2
   const allPrompts = [
     goalsAndSuccessCriteriaPrompt,
     mvpScopePrompt,
@@ -63,7 +71,10 @@ export async function runTier3Agent(
     technicalRequirementsPrompt,
     nonFunctionalRequirementsPrompt,
     riskManagementPrompt,
+    competitiveIntelligencePrompt, // NEW - Phase 1
+    implementationRoadmapPrompt,   // NEW - Phase 1
     openQuestionsPrompt,
+    executiveSummaryPrompt,        // NEW - Phase 1 (runs last to synthesize everything)
   ];
 
   // Filter out skipped sections
@@ -143,6 +154,19 @@ export async function runTier3Agent(
 
   if (results.riskManagement?.sectionData) {
     updatedJson.riskManagement = results.riskManagement.sectionData;
+  }
+
+  // NEW - Phase 1 sections
+  if (results.competitiveIntelligence?.sectionData) {
+    updatedJson.competitiveAnalysis = results.competitiveIntelligence.sectionData;
+  }
+
+  if (results.implementationRoadmap?.sectionData) {
+    updatedJson.deliveryTimeline = results.implementationRoadmap.sectionData;
+  }
+
+  if (results.executiveSummary?.sectionData) {
+    updatedJson.executiveSummary = results.executiveSummary.sectionData;
   }
 
   if (results.openQuestions?.sectionData) {

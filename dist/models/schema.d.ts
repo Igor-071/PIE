@@ -267,8 +267,20 @@ export interface Metadata {
     generatedAt: string;
     generatorVersion: string;
 }
+export interface ExecutiveSummary {
+    overview?: string;
+    problemStatement?: string;
+    solutionHighlights?: string;
+    keyDifferentiators?: string[];
+    targetMarket?: string;
+    strategicGoals?: string[];
+    technicalApproach?: string;
+    riskOverview?: string;
+    visionStatement?: string;
+}
 export interface PrdJson {
     project: Project;
+    executiveSummary?: ExecutiveSummary;
     brandFoundations?: BrandFoundations;
     targetAudience?: TargetAudience[];
     desiredEmotions?: string[];
