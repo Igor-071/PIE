@@ -330,19 +330,37 @@ ${evidenceContent}
 **API endpoints**: ${apiCount}
 **Key screens**: ${screenNames}
 
-### Inference Task
+## Your Analysis Process (Follow These Steps in Order):
 
-Based on screen names, data models, and patterns:
-1. **Identify domain**: What industry is this? (healthcare, e-commerce, fintech, etc.)
-2. **Identify user types**: Who uses different screens? (patients vs providers, customers vs admins)
-3. **Infer problems**: What pain points does this solve?
-4. **Extract features**: What capabilities does it provide?
-5. **Define personas**: Create 2-3 detailed user personas with:
-   - Realistic names and roles
-   - Demographics (job title, context)
-   - Goals (what they want to achieve)
-   - Pain points (frustrations as first-person quotes if possible)
-   - Jobs to be done (tasks they complete)
+**Step 1: Domain Identification**
+First, analyze the technical evidence to determine the industry/domain:
+- Examine screen names, data models, and API endpoints
+- Determine: What industry/domain is this application in?
+- Output your reasoning: "Based on screens like [specific screens] and models like [specific models], this appears to be a [DOMAIN] application serving the [industry] sector."
+
+**Step 2: User Type Inference**  
+Based on the domain identified in Step 1:
+- Identify the PRIMARY user types (who are the main users?)
+- Identify SECONDARY user types (who else uses this?)
+- Output your reasoning: "Primary users are [specific user type] because they interact with [specific screens/features]. Secondary users are [specific user type] who use [specific features]."
+
+**Step 3: Problem/Solution Analysis**
+Now that you know the domain and users:
+- What specific problems do these users face in this domain?
+- How does this application solve those problems?
+- What value does it provide?
+- Output your reasoning: "In the [domain] industry, [user type] typically struggle with [specific problems]. This application addresses these challenges by [specific solutions]."
+
+**Step 4: Strategic Content Generation**
+Using your analysis from Steps 1-3, NOW generate the strategic content:
+- Mission statement should reflect the domain (Step 1) and problems being solved (Step 3)
+- Vision should paint a future picture aligned with the domain context
+- Personas should match the user types identified in Step 2
+- Pain points should align with the problems from Step 3
+- Value proposition should emphasize how Step 3 solutions benefit Step 2 users
+- Ensure ALL strategic content is internally consistent with your domain analysis
+
+**Quality Check**: Before finalizing, verify that your mission, vision, and personas all clearly reflect the specific domain and user types you identified. Generic statements that could apply to any industry indicate you skipped the reasoning steps.
 
 Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions} questions for missing information.`;
     // Declare progress interval and timeout outside try block for cleanup in catch
