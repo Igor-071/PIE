@@ -507,6 +507,16 @@ export default function Home() {
                 jobId={jobState.id}
                 markdownFilename={jobState.markdownFilename}
               />
+              {/* Show token usage and validation results */}
+              <ProgressTracker
+                status={jobState.status}
+                progress={jobState.progress}
+                message={jobState.message}
+                error={jobState.error}
+                steps={jobState.steps}
+                tokenUsage={jobState.tokenUsage}
+                validationResult={jobState.validationResult}
+              />
               <button
                 onClick={handleReset}
                 className="w-full bg-[#F24B57] text-white py-3 px-4 rounded-lg font-semibold hover:bg-[#F24B57]/90 transition-all duration-200 shadow-md hover:shadow-lg"
