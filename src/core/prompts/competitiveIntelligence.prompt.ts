@@ -103,8 +103,10 @@ Return JSON:
     else if (screenCount > 10 && apiCount > 15) sophistication = "Professional";
     else if (screenCount > 5) sophistication = "Standard";
     
-    // Get tech stack
-    const stackDetected = prdJson.aiMetadata?.stackDetected?.join(", ") || "Unknown";
+    // Get tech stack - ensure it's an array
+    const stackDetected = Array.isArray(prdJson.aiMetadata?.stackDetected)
+      ? prdJson.aiMetadata.stackDetected.join(", ") || "Unknown"
+      : "Unknown";
     const isModernStack = /react|vue|angular|next|svelte/i.test(stackDetected);
     
     return `# Competitive Intelligence Analysis
@@ -128,20 +130,20 @@ Infer a comprehensive competitive analysis based on the product characteristics 
 
 ## Target Users
 
-${prdJson.targetAudience?.map(a => `
+${Array.isArray(prdJson.targetAudience) ? prdJson.targetAudience.map(a => `
 **${a.name}**
 - Role: ${a.role || "Not specified"}
 - Demographics: ${a.demographics || "Not specified"}
 - Tech Comfort: ${a.techComfort || "Not specified"}
-`).join("\n") || "Not specified"}
+`).join("\n") : "Not specified"}
 
 ## Key Features & Capabilities
 
-${prdJson.solutionOverview?.keyFeatures?.map((f, i) => `${i + 1}. ${f}`).join("\n") || "Not specified"}
+${Array.isArray(prdJson.solutionOverview?.keyFeatures) ? prdJson.solutionOverview.keyFeatures.map((f, i) => `${i + 1}. ${f}`).join("\n") : "Not specified"}
 
 ## Differentiators Claimed
 
-${prdJson.solutionOverview?.differentiators?.map((d, i) => `${i + 1}. ${d}`).join("\n") || "Not specified"}
+${Array.isArray(prdJson.solutionOverview?.differentiators) ? prdJson.solutionOverview.differentiators.map((d, i) => `${i + 1}. ${d}`).join("\n") : "Not specified"}
 
 ## Technical Capabilities
 
@@ -152,9 +154,9 @@ ${prdJson.solutionOverview?.differentiators?.map((d, i) => `${i + 1}. ${d}`).joi
 
 **Lean Canvas**: 
 - Value Proposition: ${prdJson.leanCanvas?.uniqueValueProposition || "Not specified"}
-- Customer Segments: ${prdJson.leanCanvas?.customerSegments?.join(", ") || "Not specified"}
-- Revenue Streams: ${prdJson.leanCanvas?.revenueStreams?.join(", ") || "Not specified"}
-- Channels: ${prdJson.leanCanvas?.channels?.join(", ") || "Not specified"}
+- Customer Segments: ${Array.isArray(prdJson.leanCanvas?.customerSegments) ? prdJson.leanCanvas.customerSegments.join(", ") : "Not specified"}
+- Revenue Streams: ${Array.isArray(prdJson.leanCanvas?.revenueStreams) ? prdJson.leanCanvas.revenueStreams.join(", ") : "Not specified"}
+- Channels: ${Array.isArray(prdJson.leanCanvas?.channels) ? prdJson.leanCanvas.channels.join(", ") : "Not specified"}
 
 ---
 
@@ -184,8 +186,12 @@ Be specific and insightful. Use your knowledge of typical competitive landscapes
 
 function getDomainIndicators(prdJson: any): string {
   const indicators: string[] = [];
-  const screenNames = prdJson.screens?.map((s: any) => s.name.toLowerCase()).join(" ") || "";
-  const apiPaths = prdJson.api?.map((a: any) => a.endpoint.toLowerCase()).join(" ") || "";
+  const screenNames = Array.isArray(prdJson.screens)
+    ? prdJson.screens.map((s: any) => s.name.toLowerCase()).join(" ")
+    : "";
+  const apiPaths = Array.isArray(prdJson.api)
+    ? prdJson.api.map((a: any) => a.endpoint.toLowerCase()).join(" ")
+    : "";
   
   if (/patient|clinic|doctor|medical/.test(screenNames)) indicators.push("Healthcare");
   if (/inventory|stock|warehouse/.test(screenNames)) indicators.push("Inventory Management");

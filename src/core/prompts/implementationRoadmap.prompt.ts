@@ -228,14 +228,14 @@ ${crudScreens.slice(0, 10).map(s => `- ${s.name}`).join("\n") || "None"}
 ## MVP Scope Definition
 
 **Features for MVP**:
-${prdJson.mvpScope?.features?.map((item: any, i: number) => `${i + 1}. ${item.name} (${item.priority} priority)`).join("\n") || "Not specified"}
+${(prdJson.mvpScope?.features || []).map((item: any, i: number) => `${i + 1}. ${item.name} (${item.priority} priority)`).join("\n") || "Not specified"}
 
 **Out of Scope**:
-${prdJson.mvpScope?.outOfScope?.map((item: any, i: number) => `${i + 1}. ${item}`).join("\n") || "Not specified"}
+${(prdJson.mvpScope?.outOfScope || []).map((item: any, i: number) => `${i + 1}. ${item}`).join("\n") || "Not specified"}
 
 ## Critical User Flows
 
-${prdJson.criticalUserFlows?.slice(0, 5).map((flow: any, i: number) => `
+${(prdJson.criticalUserFlows || []).slice(0, 5).map((flow: any, i: number) => `
 **Flow ${i + 1}: ${flow.name || "Unnamed"}**
 - Role: ${flow.role || "Any user"}
 - Goal: ${flow.goal || "Not specified"}
@@ -244,7 +244,7 @@ ${prdJson.criticalUserFlows?.slice(0, 5).map((flow: any, i: number) => `
 
 ## Technical Requirements
 
-${prdJson.technicalRequirements?.slice(0, 10).map((req: any, i: number) => 
+${(prdJson.technicalRequirements || []).slice(0, 10).map((req: any, i: number) => 
   `${i + 1}. ${req.description || req.requirement || "Not specified"}`
 ).join("\n") || "Not specified"}
 
@@ -256,19 +256,19 @@ ${prdJson.technicalRequirements?.slice(0, 10).map((req: any, i: number) =>
 
 ## Service Dependencies
 
-${prdJson.dependencies?.service?.map((dep: any) => 
+${(prdJson.dependencies?.service || []).map((dep: any) => 
   `- ${dep.name || dep}: ${dep.description || ""}`
 ).join("\n") || "None specified"}
 
 ## Risk Factors
 
-${prdJson.riskManagement?.risks?.slice(0, 5).map((risk: any, i: number) => 
+${(prdJson.riskManagement?.risks || []).slice(0, 5).map((risk: any, i: number) => 
   `${i + 1}. ${risk.description || "Not specified"} (${risk.likelihood || "unknown"} likelihood, ${risk.impact || "unknown"} impact)`
 ).join("\n") || "Not yet analyzed"}
 
 ## Technical Stack
 
-**Technologies**: ${prdJson.aiMetadata?.stackDetected?.join(", ") || "Not specified"}
+**Technologies**: ${(prdJson.aiMetadata?.stackDetected || []).join(", ") || "Not specified"}
 
 ---
 

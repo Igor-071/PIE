@@ -103,14 +103,20 @@ Return JSON with this structure:
     // Identify domain
     const domain = inferDomain(prdJson);
     
-    // Get key features
-    const keyFeatures = prdJson.solutionOverview?.keyFeatures?.slice(0, 10) || [];
+    // Get key features - ensure it's an array
+    const keyFeatures = Array.isArray(prdJson.solutionOverview?.keyFeatures) 
+      ? prdJson.solutionOverview.keyFeatures.slice(0, 10) 
+      : [];
     
-    // Get top risks
-    const topRisks = prdJson.riskManagement?.risks?.slice(0, 3).map((r: any) => r.description).join(", ") || "Not yet analyzed";
+    // Get top risks - ensure it's an array
+    const topRisks = Array.isArray(prdJson.riskManagement?.risks)
+      ? prdJson.riskManagement.risks.slice(0, 3).map((r: any) => r.description).join(", ") || "Not yet analyzed"
+      : "Not yet analyzed";
     
-    // Get tech stack info
-    const techStack = prdJson.aiMetadata?.stackDetected?.join(", ") || "Not specified";
+    // Get tech stack info - ensure it's an array
+    const techStack = Array.isArray(prdJson.aiMetadata?.stackDetected)
+      ? prdJson.aiMetadata.stackDetected.join(", ") || "Not specified"
+      : "Not specified";
     
     return `# Generate Executive Summary
 
@@ -126,22 +132,22 @@ Synthesize ALL sections of this PRD into a compelling executive summary suitable
 
 **Mission**: ${prdJson.brandFoundations?.mission || "Not specified"}
 **Vision**: ${prdJson.brandFoundations?.vision || "Not specified"}
-**Core Values**: ${prdJson.brandFoundations?.coreValues?.join(", ") || "Not specified"}
+**Core Values**: ${Array.isArray(prdJson.brandFoundations?.coreValues) ? prdJson.brandFoundations.coreValues.join(", ") : "Not specified"}
 
 ## Problem & Solution
 
 **Primary Problem**: ${prdJson.problemDefinition?.primaryProblem || "Not specified"}
 **Value Proposition**: ${prdJson.solutionOverview?.valueProposition || "Not specified"}
-**Key Differentiators**: ${prdJson.solutionOverview?.differentiators?.join(", ") || "Not specified"}
+**Key Differentiators**: ${Array.isArray(prdJson.solutionOverview?.differentiators) ? prdJson.solutionOverview.differentiators.join(", ") : "Not specified"}
 
 ## Target Users
 
-${prdJson.targetAudience?.map(a => `
+${Array.isArray(prdJson.targetAudience) ? prdJson.targetAudience.map(a => `
 **${a.name}**
 - Demographics: ${a.demographics || "Not specified"}
-- Goals: ${a.goals?.slice(0, 3).join(", ") || "Not specified"}
-- Pain Points: ${a.painPoints?.slice(0, 2).join("; ") || "Not specified"}
-`).join("\n") || "Not specified"}
+- Goals: ${Array.isArray(a.goals) ? a.goals.slice(0, 3).join(", ") : "Not specified"}
+- Pain Points: ${Array.isArray(a.painPoints) ? a.painPoints.slice(0, 2).join("; ") : "Not specified"}
+`).join("\n") : "Not specified"}
 
 ## Key Features
 
@@ -149,8 +155,8 @@ ${keyFeatures.map((f, i) => `${i + 1}. ${f}`).join("\n") || "Not specified"}
 
 ## Strategic Goals
 
-**Primary Goals**: ${prdJson.goalsAndSuccessCriteria?.primaryGoals?.join(", ") || "Not specified"}
-**Success Metrics**: ${prdJson.goalsAndSuccessCriteria?.successMetrics?.map(m => m.name).join(", ") || "Not specified"}
+**Primary Goals**: ${Array.isArray(prdJson.goalsAndSuccessCriteria?.primaryGoals) ? prdJson.goalsAndSuccessCriteria.primaryGoals.join(", ") : "Not specified"}
+**Success Metrics**: ${Array.isArray(prdJson.goalsAndSuccessCriteria?.successMetrics) ? prdJson.goalsAndSuccessCriteria.successMetrics.map(m => m.name).join(", ") : "Not specified"}
 
 ## Technical Overview
 
@@ -162,13 +168,13 @@ ${keyFeatures.map((f, i) => `${i + 1}. ${f}`).join("\n") || "Not specified"}
 
 ## MVP Scope
 
-**Features**: ${prdJson.mvpScope?.features?.slice(0, 5).map((f: any) => f.name).join(", ") || "Not specified"}
-**Out of Scope**: ${prdJson.mvpScope?.outOfScope?.slice(0, 3).join(", ") || "Not specified"}
+**Features**: ${Array.isArray(prdJson.mvpScope?.features) ? prdJson.mvpScope.features.slice(0, 5).map((f: any) => f.name).join(", ") : "Not specified"}
+**Out of Scope**: ${Array.isArray(prdJson.mvpScope?.outOfScope) ? prdJson.mvpScope.outOfScope.slice(0, 3).join(", ") : "Not specified"}
 
 ## Competitive Position
 
 **Market Category**: ${prdJson.competitiveAnalysis?.marketCategory || "Not specified"}
-**Competitors**: ${prdJson.competitiveAnalysis?.competitors?.join(", ") || "Not specified"}
+**Competitors**: ${Array.isArray(prdJson.competitiveAnalysis?.competitors) ? prdJson.competitiveAnalysis.competitors.join(", ") : "Not specified"}
 
 ---
 
@@ -194,8 +200,12 @@ Focus on business value, strategic positioning, and measurable outcomes.`;
 };
 
 function inferDomain(prdJson: any): string {
-  const screenNames = prdJson.screens?.map((s: any) => s.name.toLowerCase()).join(" ") || "";
-  const apiPaths = prdJson.api?.map((a: any) => a.endpoint.toLowerCase()).join(" ") || "";
+  const screenNames = Array.isArray(prdJson.screens) 
+    ? prdJson.screens.map((s: any) => s.name.toLowerCase()).join(" ") 
+    : "";
+  const apiPaths = Array.isArray(prdJson.api)
+    ? prdJson.api.map((a: any) => a.endpoint.toLowerCase()).join(" ")
+    : "";
   const combined = screenNames + " " + apiPaths;
   
   if (/patient|clinic|doctor|medical|health|appointment|treatment/.test(combined)) return "Healthcare";
