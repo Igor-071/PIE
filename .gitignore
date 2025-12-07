@@ -48,3 +48,4 @@ coverage/
 *.seed
 *.pid.lock
 
+tmp/
