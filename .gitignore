@@ -5,6 +5,8 @@ web/node_modules/
 # Build output
 dist/
 out/
+# Compiled JS files in src (should only have .ts files)
+src/**/*.js
 
 # Temporary files
 tmp/
@@ -42,6 +44,10 @@ web/out/
 # Testing
 coverage/
 .nyc_output/
+# Test artifacts
+test/**/*.js
+test/**/fixtures/
+*.test.js
 
 # Misc
 *.pid
