@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
-import { createJob, updateJob, isJobCancelled, addStep, updateActiveStep } from "@/lib/jobStore";
+import { createJob, updateJob, isJobCancelled, addStep, updateActiveStep, getJob } from "@/lib/jobStore";
 import { loadCoreModules, type CoreModules } from "@/lib/coreModules";
 
 // Route segment configuration for Next.js App Router
@@ -184,7 +184,7 @@ async function processJob(
   briefFiles: File[],
   coreModules: CoreModules
 ) {
-  const {
+    const {
     unzipRepository,
     extractTier1,
     collectEvidence,
@@ -192,6 +192,7 @@ async function processJob(
     runTier2Agent,
     runTier3Agent,
     writePrdArtifacts,
+    validatePrd,
   } = coreModules;
     const tmpDir = path.join(process.cwd(), "tmp", "uploads");
     const briefDir = path.join(tmpDir, jobId, "briefs");
@@ -274,6 +275,9 @@ async function processJob(
     let outputDir: string | undefined;
     let projectName: string | undefined;
     let markdownFilename: string | undefined;
+    let totalTokenUsage: { promptTokens: number; completionTokens: number; totalTokens: number } = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    let tokenUsageByPhase: Array<{ phase: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number } }> = [];
+    let validationResult: any = null;
 
     try {
       // Step 2: Extract Tier 1 data
@@ -427,6 +431,43 @@ async function processJob(
       addStep(jobId, "PRD documents generated successfully", "completed");
       console.log(`[generate] PRD artifacts written successfully. Markdown filename: ${markdownFilename}`);
 
+      // Step 9: Validate PRD and track token usage
+      addStep(jobId, "Validating PRD and tracking token usage...", "active");
+      validationResult = validatePrd(tier3Result.updatedJson);
+      
+      // Aggregate token usage from Tier 2 and Tier 3
+      tokenUsageByPhase = [];
+      
+      if (tier2Result.tokenUsage) {
+        tokenUsageByPhase.push({
+          phase: "Tier 2 (Business Strategy)",
+          usage: tier2Result.tokenUsage,
+        });
+      }
+      
+      if (tier3Result.tokenUsage) {
+        tokenUsageByPhase.push({
+          phase: "Tier 3 (Detailed Requirements)",
+          usage: tier3Result.tokenUsage,
+        });
+      }
+
+      totalTokenUsage = tokenUsageByPhase.reduce(
+        (acc, phase) => ({
+          promptTokens: acc.promptTokens + phase.usage.promptTokens,
+          completionTokens: acc.completionTokens + phase.usage.completionTokens,
+          totalTokens: acc.totalTokens + phase.usage.totalTokens,
+        }),
+        { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      );
+
+      if (totalTokenUsage.totalTokens > 0) {
+        console.log(`[generate] Total token usage: ${totalTokenUsage.totalTokens} tokens`);
+        console.log(`[generate] Token usage by phase:`, tokenUsageByPhase.map(p => `${p.phase}: ${p.usage.totalTokens}`).join(", "));
+      }
+
+      addStep(jobId, `Validation complete: ${validationResult.isValid ? "Valid" : "Issues found"} (Score: ${validationResult.score}/100)`, "completed");
+
       // Clean up uploaded files
       try {
         await fs.unlink(zipPath);
@@ -451,6 +492,7 @@ async function processJob(
     // Mark as complete (only if not cancelled and all required fields are set)
     if (!isJobCancelled(jobId) && outputDir && markdownFilename) {
       addStep(jobId, "PRD generation complete!", "completed");
+      
       updateJob(jobId, {
         status: "complete",
         progress: 100,
@@ -458,6 +500,16 @@ async function processJob(
         outputDir,
         projectName: projectName || "unknown",
         markdownFilename,
+        tokenUsage: totalTokenUsage.totalTokens > 0 ? {
+          total: totalTokenUsage,
+          byPhase: tokenUsageByPhase,
+        } : undefined,
+        validationResult: validationResult ? {
+          isValid: validationResult.isValid,
+          score: validationResult.score,
+          errors: validationResult.errors.length,
+          warnings: validationResult.warnings.length,
+        } : undefined,
       });
     } else if (!isJobCancelled(jobId) && !markdownFilename) {
       // If we got here without markdownFilename, something went wrong

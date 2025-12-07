@@ -8,6 +8,7 @@ import {
 import { EvidenceDocument } from "./evidenceCollector.js";
 import { chunkEvidence, estimateTokens } from "./tokenCounter.js";
 import { retryWithBackoff } from "./retry.js";
+import { TokenUsage } from "./tokenTracker.js";
 
 // Max evidence tokens constant (not exported from tokenCounter, so define here)
 const MAX_EVIDENCE_TOKENS = 110000;
@@ -15,6 +16,7 @@ const MAX_EVIDENCE_TOKENS = 110000;
 export interface Tier2Result {
   updatedJson: PrdJson;
   questionsForClient: QuestionsForClient;
+  tokenUsage?: TokenUsage;
 }
 
 /**
@@ -493,6 +495,18 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
     // Report progress after API call completes
     updateProgress(57, "Processing strategic insights...");
 
+    // Extract token usage from API response
+    const tokenUsage: TokenUsage | undefined = completion.usage ? {
+      promptTokens: completion.usage.prompt_tokens || 0,
+      completionTokens: completion.usage.completion_tokens || 0,
+      totalTokens: completion.usage.total_tokens || 0,
+    } : undefined;
+
+    if (tokenUsage) {
+      console.log(`[Tier2Agent] Token usage: ${tokenUsage.totalTokens} total (${tokenUsage.promptTokens} prompt + ${tokenUsage.completionTokens} completion)`);
+      console.log(`[Tier2Agent] Estimated: ${totalEstimatedTokens}, Actual: ${tokenUsage.totalTokens}, Accuracy: ${((1 - Math.abs(tokenUsage.totalTokens - totalEstimatedTokens) / totalEstimatedTokens) * 100).toFixed(1)}%`);
+    }
+
     const responseContent = completion.choices[0]?.message?.content;
     if (!responseContent) {
       throw new Error("Empty response from OpenAI API");
@@ -545,6 +559,7 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
     return {
       updatedJson: mergedJson,
       questionsForClient: parsedResponse.questionsForClient,
+      tokenUsage,
     };
   } catch (error) {
     // Ensure progress interval and timeout are cleared on error

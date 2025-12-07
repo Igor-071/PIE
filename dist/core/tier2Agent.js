@@ -436,6 +436,16 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
         }
         // Report progress after API call completes
         updateProgress(57, "Processing strategic insights...");
+        // Extract token usage from API response
+        const tokenUsage = completion.usage ? {
+            promptTokens: completion.usage.prompt_tokens || 0,
+            completionTokens: completion.usage.completion_tokens || 0,
+            totalTokens: completion.usage.total_tokens || 0,
+        } : undefined;
+        if (tokenUsage) {
+            console.log(`[Tier2Agent] Token usage: ${tokenUsage.totalTokens} total (${tokenUsage.promptTokens} prompt + ${tokenUsage.completionTokens} completion)`);
+            console.log(`[Tier2Agent] Estimated: ${totalEstimatedTokens}, Actual: ${tokenUsage.totalTokens}, Accuracy: ${((1 - Math.abs(tokenUsage.totalTokens - totalEstimatedTokens) / totalEstimatedTokens) * 100).toFixed(1)}%`);
+        }
         const responseContent = completion.choices[0]?.message?.content;
         if (!responseContent) {
             throw new Error("Empty response from OpenAI API");
@@ -476,6 +486,7 @@ Fill ALL strategic fields with your best analysis. Generate up to ${maxQuestions
         return {
             updatedJson: mergedJson,
             questionsForClient: parsedResponse.questionsForClient,
+            tokenUsage,
         };
     }
     catch (error) {

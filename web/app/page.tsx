@@ -25,6 +25,24 @@ interface Step {
   progress?: number;
 }
 
+interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+interface TokenUsageByPhase {
+  phase: string;
+  usage: TokenUsage;
+}
+
+interface ValidationResult {
+  isValid: boolean;
+  score: number;
+  errors: number;
+  warnings: number;
+}
+
 interface JobState {
   id: string;
   status: JobStatus;
@@ -36,6 +54,11 @@ interface JobState {
   markdownFilename?: string;
   networkError?: boolean; // Track if error is network-related
   steps?: Step[]; // Detailed step tracking
+  tokenUsage?: {
+    total: TokenUsage;
+    byPhase: TokenUsageByPhase[];
+  };
+  validationResult?: ValidationResult;
 }
 
 const FETCH_TIMEOUT = 10000; // 10 seconds
@@ -449,6 +472,8 @@ export default function Home() {
                 message={jobState.message}
                 error={jobState.error}
                 steps={jobState.steps}
+                tokenUsage={jobState.tokenUsage}
+                validationResult={jobState.validationResult}
               />
               {(jobState.status === "error" || jobState.status === "cancelled") && (
                 <div className="flex gap-3">

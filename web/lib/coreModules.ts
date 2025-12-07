@@ -14,6 +14,7 @@ import { buildInitialPrdJsonFromTier1 } from "./pie-core/core/jsonMerger.js";
 import { runTier2Agent } from "./pie-core/core/tier2Agent.js";
 import { runTier3Agent } from "./pie-core/core/tier3Agent.js";
 import { writePrdArtifacts } from "./pie-core/core/prdGenerator.js";
+import { validatePrd } from "./pie-core/core/prdValidator.js";
 
 /**
  * Load all core modules needed for PRD generation
@@ -32,6 +33,7 @@ export async function loadCoreModules() {
     runTier2Agent,
     runTier3Agent,
     writePrdArtifacts,
+    validatePrd,
   };
 
   // Check if any module is undefined

@@ -10,12 +10,35 @@ interface Step {
   progress?: number;
 }
 
+interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+interface TokenUsageByPhase {
+  phase: string;
+  usage: TokenUsage;
+}
+
+interface ValidationResult {
+  isValid: boolean;
+  score: number;
+  errors: number;
+  warnings: number;
+}
+
 interface ProgressTrackerProps {
   status: string;
   progress: number;
   message: string;
   error?: string;
   steps?: Step[];
+  tokenUsage?: {
+    total: TokenUsage;
+    byPhase: TokenUsageByPhase[];
+  };
+  validationResult?: ValidationResult;
 }
 
 const statusLabels: Record<string, string> = {
@@ -88,6 +111,8 @@ export default function ProgressTracker({
   message,
   error,
   steps = [],
+  tokenUsage,
+  validationResult,
 }: ProgressTrackerProps) {
   const currentStepIndex = mainSteps.findIndex((step) => step.key === status);
   const isComplete = status === "complete";
@@ -327,6 +352,95 @@ export default function ProgressTracker({
               );
             })}
             <div ref={stepsEndRef} />
+          </div>
+        </div>
+      )}
+
+      {/* Token Usage Display */}
+      {tokenUsage && tokenUsage.total.totalTokens > 0 && (
+        <div className="mt-8 border-t border-[#E7E1E2] pt-6">
+          <h3 className="text-lg font-semibold text-[#161010] mb-4">Token Usage</h3>
+          <div className="bg-[#E7E1E2]/20 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-[#161010]">Total Tokens:</span>
+              <span className="text-sm font-bold text-[#161010]">
+                {tokenUsage.total.totalTokens.toLocaleString()}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-[#161010] opacity-70">Prompt:</span>
+                <span className="ml-2 font-medium text-[#161010]">
+                  {tokenUsage.total.promptTokens.toLocaleString()}
+                </span>
+              </div>
+              <div>
+                <span className="text-[#161010] opacity-70">Completion:</span>
+                <span className="ml-2 font-medium text-[#161010]">
+                  {tokenUsage.total.completionTokens.toLocaleString()}
+                </span>
+              </div>
+            </div>
+            {tokenUsage.byPhase && tokenUsage.byPhase.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[#E7E1E2]">
+                <p className="text-xs font-medium text-[#161010] mb-2">By Phase:</p>
+                <div className="space-y-1">
+                  {tokenUsage.byPhase.map((phase, index) => (
+                    <div key={index} className="flex items-center justify-between text-xs">
+                      <span className="text-[#161010] opacity-70">{phase.phase}:</span>
+                      <span className="font-medium text-[#161010]">
+                        {phase.usage.totalTokens.toLocaleString()} tokens
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Validation Results Display */}
+      {validationResult && (
+        <div className="mt-6 border-t border-[#E7E1E2] pt-6">
+          <h3 className="text-lg font-semibold text-[#161010] mb-4">PRD Validation</h3>
+          <div className={`rounded-lg p-4 ${
+            validationResult.isValid 
+              ? "bg-green-50 border-2 border-green-200" 
+              : "bg-yellow-50 border-2 border-yellow-200"
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium text-[#161010]">Status:</span>
+              <span className={`text-sm font-bold ${
+                validationResult.isValid ? "text-green-700" : "text-yellow-700"
+              }`}>
+                {validationResult.isValid ? "✓ Valid" : "⚠ Issues Found"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-[#161010] opacity-70">Quality Score:</span>
+              <span className="text-sm font-bold text-[#161010]">
+                {validationResult.score}/100
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-xs mt-3 pt-3 border-t border-current/20">
+              <div>
+                <span className="text-[#161010] opacity-70">Errors:</span>
+                <span className={`ml-2 font-medium ${
+                  validationResult.errors > 0 ? "text-red-600" : "text-[#161010]"
+                }`}>
+                  {validationResult.errors}
+                </span>
+              </div>
+              <div>
+                <span className="text-[#161010] opacity-70">Warnings:</span>
+                <span className={`ml-2 font-medium ${
+                  validationResult.warnings > 0 ? "text-yellow-600" : "text-[#161010]"
+                }`}>
+                  {validationResult.warnings}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}

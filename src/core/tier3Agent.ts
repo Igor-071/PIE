@@ -1,6 +1,7 @@
 import { PrdJson, QuestionsForClient } from "../models/schema.js";
 import { EvidenceDocument } from "./evidenceCollector.js";
 import { executePrompts, PromptContext } from "./prompts/promptTemplate.js";
+import { TokenUsage } from "./tokenTracker.js";
 import { assumptionsPrompt } from "./prompts/assumptions.prompt.js";
 import { dependenciesPrompt } from "./prompts/dependencies.prompt.js";
 import { riskManagementPrompt } from "./prompts/riskManagement.prompt.js";
@@ -50,6 +51,7 @@ export async function runTier3Agent(
 ): Promise<{
   updatedJson: PrdJson;
   questions: QuestionsForClient;
+  tokenUsage?: TokenUsage;
 }> {
   const context: PromptContext = {
     prdJson,
@@ -175,11 +177,28 @@ export async function runTier3Agent(
 
   // Collect all questions from all prompts
   const allQuestions: QuestionsForClient["questions"] = [];
+  
+  // Aggregate token usage from all prompts
+  let totalTokenUsage: TokenUsage = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+  };
+
   Object.values(results).forEach(result => {
     if (result.questions) {
       allQuestions.push(...result.questions);
     }
+    if (result.tokenUsage) {
+      totalTokenUsage.promptTokens += result.tokenUsage.promptTokens;
+      totalTokenUsage.completionTokens += result.tokenUsage.completionTokens;
+      totalTokenUsage.totalTokens += result.tokenUsage.totalTokens;
+    }
   });
+
+  if (totalTokenUsage.totalTokens > 0) {
+    console.log(`[Tier3Agent] Total token usage: ${totalTokenUsage.totalTokens} tokens (${totalTokenUsage.promptTokens} prompt + ${totalTokenUsage.completionTokens} completion)`);
+  }
 
   return {
     updatedJson,
@@ -187,6 +206,7 @@ export async function runTier3Agent(
       questions: allQuestions,
       generatedAt: new Date().toISOString(),
     },
+    tokenUsage: totalTokenUsage.totalTokens > 0 ? totalTokenUsage : undefined,
   };
 }
 

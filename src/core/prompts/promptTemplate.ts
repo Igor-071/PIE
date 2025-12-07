@@ -18,6 +18,11 @@ export interface PromptResult {
     reason: string;
     priority: "high" | "medium" | "low";
   }>;
+  tokenUsage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 export interface SectionPrompt {
@@ -84,7 +89,19 @@ export async function executePrompt(
     }
 
     const parsed = JSON.parse(responseContent);
-    return prompt.parseResponse(JSON.stringify(parsed));
+    const result = prompt.parseResponse(JSON.stringify(parsed));
+    
+    // Extract token usage from API response
+    const tokenUsage = completion.usage ? {
+      promptTokens: completion.usage.prompt_tokens || 0,
+      completionTokens: completion.usage.completion_tokens || 0,
+      totalTokens: completion.usage.total_tokens || 0,
+    } : undefined;
+
+    return {
+      ...result,
+      tokenUsage,
+    };
   } catch (error) {
     // Provide more specific error messages for timeout errors
     if (error instanceof Error) {

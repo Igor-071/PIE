@@ -20,6 +20,17 @@ export interface Step {
   progress?: number; // Optional progress for active steps
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface TokenUsageByPhase {
+  phase: string;
+  usage: TokenUsage;
+}
+
 export interface JobState {
   id: string;
   status: JobStatus;
@@ -32,6 +43,16 @@ export interface JobState {
   cancelled?: boolean;
   createdAt: number; // Timestamp when job was created
   steps?: Step[]; // Detailed step tracking
+  tokenUsage?: {
+    total: TokenUsage;
+    byPhase: TokenUsageByPhase[];
+  };
+  validationResult?: {
+    isValid: boolean;
+    score: number;
+    errors: number;
+    warnings: number;
+  };
 }
 
 // Use a global Map to ensure persistence across API route calls

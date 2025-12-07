@@ -1,8 +1,10 @@
 import { PrdJson, QuestionsForClient } from "../models/schema.js";
 import { EvidenceDocument } from "./evidenceCollector.js";
+import { TokenUsage } from "./tokenTracker.js";
 export interface Tier2Result {
     updatedJson: PrdJson;
     questionsForClient: QuestionsForClient;
+    tokenUsage?: TokenUsage;
 }
 export interface Tier2AgentOptions {
     maxQuestions?: number;
