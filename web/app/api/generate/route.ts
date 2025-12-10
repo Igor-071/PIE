@@ -69,35 +69,45 @@ export async function POST(request: NextRequest) {
       const zipFile = formData.get("zipFile") as File | null;
       const briefText = formData.get("briefText") as string | null;
       const briefFiles = formData.getAll("briefFiles") as File[];
+      const prototypeUrls = formData.getAll("prototypeUrls") as string[];
 
       console.log(`[generate] ZIP file: ${zipFile ? `${zipFile.name} (${zipFile.size} bytes)` : 'none'}`);
       console.log(`[generate] Brief text: ${briefText ? briefText.length + ' chars' : 'none'}`);
       console.log(`[generate] Brief files: ${briefFiles.length}`);
+      console.log(`[generate] Prototype URLs: ${prototypeUrls.length}`);
 
-      if (!zipFile) {
+      // Validate and normalize URLs (up to 3)
+      const { validateUrls } = await import("@/lib/urlEvidence");
+      const validUrls = validateUrls(prototypeUrls, 3);
+      
+      console.log(`[generate] Valid URLs after validation: ${validUrls.length}`);
+
+      // Either ZIP file or URLs must be provided
+      if (!zipFile && validUrls.length === 0) {
         return NextResponse.json(
-          { error: "ZIP file is required" },
+          { error: "Either a ZIP file or prototype URLs (up to 3) must be provided" },
           { status: 400 }
         );
       }
 
-      // Validate file type
-      if (!zipFile.name.toLowerCase().endsWith(".zip")) {
-        return NextResponse.json(
-          { error: "File must be a ZIP archive" },
-          { status: 400 }
-        );
-      }
-
-      // Validate file size limits
+      // Validate ZIP file type and size (if provided)
       const MAX_ZIP_SIZE = 100 * 1024 * 1024; // 100MB
       const MAX_BRIEF_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-      if (zipFile.size > MAX_ZIP_SIZE) {
-        return NextResponse.json(
-          { error: `ZIP file size exceeds maximum allowed size of ${MAX_ZIP_SIZE / 1024 / 1024}MB` },
-          { status: 400 }
-        );
+      if (zipFile) {
+        if (!zipFile.name.toLowerCase().endsWith(".zip")) {
+          return NextResponse.json(
+            { error: "File must be a ZIP archive" },
+            { status: 400 }
+          );
+        }
+
+        if (zipFile.size > MAX_ZIP_SIZE) {
+          return NextResponse.json(
+            { error: `ZIP file size exceeds maximum allowed size of ${MAX_ZIP_SIZE / 1024 / 1024}MB` },
+            { status: 400 }
+          );
+        }
       }
 
       // Validate brief file sizes
@@ -113,11 +123,48 @@ export async function POST(request: NextRequest) {
       // Create job
       const jobId = createJob();
       console.log("[generate] Created job:", jobId);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/3547cde9-a9d2-4669-a991-f1254aa07bed',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          sessionId:'debug-session',
+          runId:'pre-fix',
+          hypothesisId:'H2',
+          location:'web/app/api/generate/route.ts:114',
+          message:'generate POST job created',
+          data:{
+            jobId,
+            hasZipFile: !!zipFile,
+            briefFilesCount: briefFiles.length
+          },
+          timestamp:Date.now()
+        })
+      }).catch(()=>{});
+      try {
+        const payload = {
+          sessionId: 'debug-session',
+          runId: 'pre-fix',
+          hypothesisId: 'H2',
+          location: 'web/app/api/generate/route.ts:114',
+          message: 'generate POST job created (fs)',
+          data: {
+            jobId,
+            hasZipFile: !!zipFile,
+            briefFilesCount: briefFiles.length
+          },
+          timestamp: Date.now()
+        };
+        await fs.appendFile("/Users/igorkriasnik/work/PIE/.cursor/debug.log", JSON.stringify(payload) + "\n");
+      } catch {
+        // Swallow logging errors
+      }
+      // #endregion
 
       // Process asynchronously with imported modules
       // Use setImmediate to ensure the response is sent before processing starts
       setImmediate(() => {
-        processJob(jobId, zipFile, briefText, briefFiles, coreModules).catch((error) => {
+        processJob(jobId, zipFile, briefText, briefFiles, validUrls, coreModules).catch((error) => {
           console.error("[generate] Error in processJob:", error);
           console.error("[generate] Error stack:", error instanceof Error ? error.stack : undefined);
           updateJob(jobId, {
@@ -179,9 +226,10 @@ export async function POST(request: NextRequest) {
 
 async function processJob(
   jobId: string,
-  zipFile: File,
+  zipFile: File | null,
   briefText: string | null,
   briefFiles: File[],
+  prototypeUrls: string[],
   coreModules: CoreModules
 ) {
     const {
@@ -196,10 +244,52 @@ async function processJob(
   } = coreModules;
     const tmpDir = path.join(process.cwd(), "tmp", "uploads");
     const briefDir = path.join(tmpDir, jobId, "briefs");
-    const zipPath = path.join(tmpDir, `${jobId}.zip`);
+    const zipPath = zipFile ? path.join(tmpDir, `${jobId}.zip`) : null;
     const briefFilePaths: string[] = [];
+    
+    // Determine processing mode
+    const hasZip = !!zipFile;
+    const hasUrls = prototypeUrls.length > 0;
+    console.log(`[processJob] Mode: ZIP=${hasZip}, URLs=${hasUrls} (${prototypeUrls.length})`);
 
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/3547cde9-a9d2-4669-a991-f1254aa07bed',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          sessionId:'debug-session',
+          runId:'pre-fix',
+          hypothesisId:'H2',
+          location:'web/app/api/generate/route.ts:202',
+          message:'processJob start',
+          data:{
+            jobId,
+            zipPath,
+            briefFilesCount: briefFiles.length
+          },
+          timestamp:Date.now()
+        })
+      }).catch(()=>{});
+      try {
+        const payload = {
+          sessionId: 'debug-session',
+          runId: 'pre-fix',
+          hypothesisId: 'H2',
+          location: 'web/app/api/generate/route.ts:202',
+          message: 'processJob start (fs)',
+          data: {
+            jobId,
+            zipPath,
+            briefFilesCount: briefFiles.length
+          },
+          timestamp: Date.now()
+        };
+        await fs.appendFile("/Users/igorkriasnik/work/PIE/.cursor/debug.log", JSON.stringify(payload) + "\n");
+      } catch {
+        // Swallow logging errors
+      }
+      // #endregion
       // Check if cancelled before starting
       if (isJobCancelled(jobId)) {
         return;
@@ -209,22 +299,24 @@ async function processJob(
       await fs.mkdir(tmpDir, { recursive: true });
       await fs.mkdir(briefDir, { recursive: true });
 
-      // Save uploaded ZIP file
-      addStep(jobId, "Saving uploaded file...", "active");
-      updateJob(jobId, {
-        status: "unzipping",
-        progress: 10,
-        message: "Saving uploaded file...",
-      });
+      // Save uploaded ZIP file (if provided)
+      if (hasZip && zipFile && zipPath) {
+        addStep(jobId, "Saving uploaded file...", "active");
+        updateJob(jobId, {
+          status: "unzipping",
+          progress: 10,
+          message: "Saving uploaded file...",
+        });
 
-      if (isJobCancelled(jobId)) {
-        return;
+        if (isJobCancelled(jobId)) {
+          return;
+        }
+
+        const arrayBuffer = await zipFile.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        await fs.writeFile(zipPath, buffer);
+        addStep(jobId, "Uploaded file saved", "completed");
       }
-
-      const arrayBuffer = await zipFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      await fs.writeFile(zipPath, buffer);
-      addStep(jobId, "Uploaded file saved", "completed");
 
       // Save brief files if provided
     if (briefFiles && briefFiles.length > 0) {
@@ -250,28 +342,31 @@ async function processJob(
       addStep(jobId, `Processed ${briefFiles.length} brief file${briefFiles.length > 1 ? 's' : ''}`, "completed");
     }
 
-    // Step 1: Unzip repository
-    addStep(jobId, "Unzipping repository...", "active");
-    updateJob(jobId, {
-      status: "unzipping",
-      progress: 20,
-      message: "Unzipping repository...",
-    });
-
-    if (isJobCancelled(jobId)) {
-      // Clean up on cancel
-      try {
-        await fs.unlink(zipPath).catch(() => {});
-      } catch {
-        // Ignore cleanup errors
-      }
-      return;
-    }
-
+    // Step 1: Unzip repository (if ZIP provided)
     let unzippedPath: string | undefined;
+    
+    if (hasZip && zipPath) {
+      addStep(jobId, "Unzipping repository...", "active");
+      updateJob(jobId, {
+        status: "unzipping",
+        progress: 20,
+        message: "Unzipping repository...",
+      });
 
-    unzippedPath = await unzipRepository(zipPath);
-    addStep(jobId, "Repository unzipped successfully", "completed");
+      if (isJobCancelled(jobId)) {
+        // Clean up on cancel
+        try {
+          await fs.unlink(zipPath).catch(() => {});
+        } catch {
+          // Ignore cleanup errors
+        }
+        return;
+      }
+
+      unzippedPath = await unzipRepository(zipPath);
+      addStep(jobId, "Repository unzipped successfully", "completed");
+    }
+    
     let outputDir: string | undefined;
     let projectName: string | undefined;
     let markdownFilename: string | undefined;
@@ -280,45 +375,130 @@ async function processJob(
     let validationResult: any = null;
 
     try {
-      // Step 2: Extract Tier 1 data
-      addStep(jobId, "Extracting technical data (Tier 1)...", "active");
-      updateJob(jobId, {
-        status: "tier1",
-        progress: 40,
-        message: "Extracting technical data (Tier 1)...",
-      });
+      // Step 2: Extract Tier 1 data (if ZIP provided) or build minimal Tier1 from URLs
+      let tier1: any;
+      
+      if (hasZip && unzippedPath) {
+        addStep(jobId, "Extracting technical data (Tier 1)...", "active");
+        updateJob(jobId, {
+          status: "tier1",
+          progress: 40,
+          message: "Extracting technical data (Tier 1)...",
+        });
 
-      if (isJobCancelled(jobId)) {
-        return;
+        if (isJobCancelled(jobId)) {
+          return;
+        }
+
+        tier1 = await extractTier1(unzippedPath);
+        projectName = tier1.projectName;
+        
+        addStep(jobId, "Technical data extracted (screens, APIs, data models)", "completed");
+      } else {
+        // URLs-only mode: build minimal Tier1 from URLs
+        addStep(jobId, "Building project structure from URLs...", "active");
+        updateJob(jobId, {
+          status: "tier1",
+          progress: 40,
+          message: "Analyzing prototype URLs...",
+        });
+
+        if (isJobCancelled(jobId)) {
+          return;
+        }
+
+        // Extract domain/hostname for project name
+        try {
+          const firstUrl = new URL(prototypeUrls[0]);
+          projectName = firstUrl.hostname.replace(/^www\./, '').replace(/\.[^.]+$/, '');
+        } catch {
+          projectName = 'prototype-project';
+        }
+
+        // Build minimal Tier1 structure
+        // Note: navigation must be an array of Navigation objects, not an object with routes
+        tier1 = {
+          projectName,
+          screens: prototypeUrls.map((url, idx) => ({
+            id: `screen-${idx}`,
+            name: `Screen ${idx + 1}`,
+            path: url,
+            type: 'web-page',
+          })),
+          apis: [],
+          apiEndpoints: [],
+          dataModels: {},
+          statePatterns: [],
+          events: [],
+          navigation: [], // Empty array - URLs don't provide navigation relationships
+          aiMetadata: {
+            analysisTimestamp: new Date().toISOString(),
+            repositoryStructure: {
+              totalFiles: prototypeUrls.length,
+              frameworks: ['web'],
+            },
+          },
+        };
+        
+        addStep(jobId, `Project structure created (${prototypeUrls.length} prototype page${prototypeUrls.length > 1 ? 's' : ''})`, "completed");
       }
 
-      const tier1 = await extractTier1(unzippedPath!);
-      projectName = tier1.projectName;
-      addStep(jobId, "Technical data extracted (screens, APIs, data models)", "completed");
+      // Step 3: Collect evidence from repository and/or URLs
+      let evidence: any[] = [];
+      
+      if (hasZip && unzippedPath) {
+        addStep(jobId, "Collecting evidence from repository...", "active");
+        updateJob(jobId, {
+          status: "tier1",
+          progress: 50,
+          message: "Collecting evidence from repository...",
+        });
 
-      // Step 3: Collect evidence
-      addStep(jobId, "Collecting evidence from repository...", "active");
-      updateJob(jobId, {
-        status: "tier1",
-        progress: 50,
-        message: "Collecting evidence...",
-      });
+        if (isJobCancelled(jobId)) {
+          return;
+        }
 
-      if (isJobCancelled(jobId)) {
-        return;
+        // Collect evidence in Tier 2 mode (business-focused, excludes technical details)
+        evidence = await collectEvidence(unzippedPath, {
+          briefText: briefText || null,
+          briefFiles: briefFilePaths.length > 0 ? briefFilePaths : undefined,
+          mode: "tier2", // Use Tier 2 mode for business strategy analysis
+        });
+        addStep(jobId, `Collected ${evidence.length} evidence document${evidence.length !== 1 ? 's' : ''} from repository`, "completed");
       }
+      
+      // Collect evidence from prototype URLs (if provided)
+      if (hasUrls) {
+        addStep(jobId, `Fetching prototype URLs (${prototypeUrls.length})...`, "active");
+        updateJob(jobId, {
+          status: "tier1",
+          progress: hasZip ? 55 : 50,
+          message: "Fetching prototype URLs...",
+        });
 
-      // Collect evidence in Tier 2 mode (business-focused, excludes technical details)
-      const evidence = await collectEvidence(unzippedPath!, {
-        briefText: briefText || null,
-        briefFiles: briefFilePaths.length > 0 ? briefFilePaths : undefined,
-        mode: "tier2", // Use Tier 2 mode for business strategy analysis
-      });
-      addStep(jobId, `Collected ${evidence.length} evidence document${evidence.length !== 1 ? 's' : ''} (business-focused)`, "completed");
+        if (isJobCancelled(jobId)) {
+          return;
+        }
+
+        const { collectUrlEvidence } = await import("@/lib/urlEvidence");
+        const urlEvidence = await collectUrlEvidence(prototypeUrls, {
+          timeout: 10000,
+          maxContentSize: 2 * 1024 * 1024,
+        });
+        
+        // Merge URL evidence with repository evidence
+        evidence = [...evidence, ...urlEvidence];
+        
+        addStep(jobId, `Collected ${urlEvidence.length} evidence document${urlEvidence.length !== 1 ? 's' : ''} from URLs`, "completed");
+      }
+      
+      console.log(`[processJob] Total evidence documents: ${evidence.length}`);
 
       // Step 4: Build initial PRD JSON
       addStep(jobId, "Building initial PRD structure...", "active");
+      
       const baseJson = buildInitialPrdJsonFromTier1(tier1);
+      
       addStep(jobId, "Initial PRD structure created", "completed");
 
       // Step 5: Run Tier 2 agent
@@ -334,6 +514,7 @@ async function processJob(
       }
 
       let lastTier2Message = "";
+      
       const tier2Result = await runTier2Agent(baseJson, evidence, {
         maxQuestions: 7,
         onProgress: (progress: number, message: string) => {
@@ -470,7 +651,9 @@ async function processJob(
 
       // Clean up uploaded files
       try {
-        await fs.unlink(zipPath);
+        if (zipPath) {
+          await fs.unlink(zipPath);
+        }
         // Clean up brief files directory
         if (briefFilePaths.length > 0) {
           await fs.rm(briefDir, { recursive: true, force: true });
@@ -555,7 +738,9 @@ async function processJob(
 
     // Clean up on error
     try {
-      await fs.unlink(zipPath).catch(() => {});
+      if (zipPath) {
+        await fs.unlink(zipPath).catch(() => {});
+      }
       if (briefFilePaths.length > 0) {
         await fs.rm(briefDir, { recursive: true, force: true }).catch(() => {});
       }

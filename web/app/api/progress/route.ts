@@ -24,6 +24,47 @@ export async function GET(request: NextRequest) {
 
     const job = getJob(jobId);
 
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/3547cde9-a9d2-4669-a991-f1254aa07bed',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        sessionId:'debug-session',
+        runId:'pre-fix',
+        hypothesisId:'H3',
+        location:'web/app/api/progress/route.ts:25',
+        message:'progress GET',
+        data:{
+          jobId,
+          jobFound: !!job,
+          status: job?.status ?? null,
+          progress: job?.progress ?? null
+        },
+        timestamp:Date.now()
+      })
+    }).catch(()=>{});
+    try {
+      const payload = {
+        sessionId: 'debug-session',
+        runId: 'pre-fix',
+        hypothesisId: 'H3',
+        location: 'web/app/api/progress/route.ts:25',
+        message: 'progress GET (fs)',
+        data: {
+          jobId,
+          jobFound: !!job,
+          status: job?.status ?? null,
+          progress: job?.progress ?? null
+        },
+        timestamp: Date.now()
+      };
+      const fs = await import("fs/promises");
+      await fs.appendFile("/Users/igorkriasnik/work/PIE/.cursor/debug.log", JSON.stringify(payload) + "\n");
+    } catch {
+      // Swallow logging errors
+    }
+    // #endregion
+
     console.log("[progress] Job lookup result:", job ? "found" : "not found", "jobId:", jobId);
 
     if (!job) {

@@ -69,6 +69,8 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [briefText, setBriefText] = useState("");
   const [briefFiles, setBriefFiles] = useState<File[]>([]);
+  const [prototypeUrls, setPrototypeUrls] = useState<string[]>(["", "", ""]);
+  const [urlErrors, setUrlErrors] = useState<string[]>(["", "", ""]);
   const [jobState, setJobState] = useState<JobState | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -283,9 +285,47 @@ export default function Home() {
     }
   }, [jobState?.id, jobState?.status]); // Depend on both ID and status to properly clean up interval
 
+  // Validate URL format
+  const validateUrlFormat = (url: string): boolean => {
+    if (!url.trim()) return true; // Empty is OK
+    try {
+      const parsed = new URL(url.trim());
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
+  // Handle URL input change with validation
+  const handleUrlChange = (index: number, value: string) => {
+    const newUrls = [...prototypeUrls];
+    newUrls[index] = value;
+    setPrototypeUrls(newUrls);
+
+    // Validate the URL
+    const newErrors = [...urlErrors];
+    if (value.trim() && !validateUrlFormat(value)) {
+      newErrors[index] = "Please enter a valid URL starting with http:// or https://";
+    } else {
+      newErrors[index] = "";
+    }
+    setUrlErrors(newErrors);
+  };
+
   const handleSubmit = async () => {
-    if (!selectedFile) {
-      alert("Please upload a ZIP file (required)");
+    // Get non-empty URLs
+    const nonEmptyUrls = prototypeUrls.filter(url => url.trim());
+    
+    // Check if we have either a ZIP or URLs
+    if (!selectedFile && nonEmptyUrls.length === 0) {
+      alert("Please upload a ZIP file or provide at least one prototype URL");
+      return;
+    }
+
+    // Validate all non-empty URLs
+    const hasInvalidUrls = nonEmptyUrls.some(url => !validateUrlFormat(url));
+    if (hasInvalidUrls) {
+      alert("Please fix invalid URLs before submitting");
       return;
     }
 
@@ -294,13 +334,19 @@ export default function Home() {
 
     try {
       const formData = new FormData();
-      formData.append("zipFile", selectedFile);
+      if (selectedFile) {
+        formData.append("zipFile", selectedFile);
+      }
       if (briefText.trim()) {
         formData.append("briefText", briefText);
       }
       // Append all brief files
       briefFiles.forEach((file) => {
         formData.append("briefFiles", file);
+      });
+      // Append all non-empty URLs
+      nonEmptyUrls.forEach((url) => {
+        formData.append("prototypeUrls", url.trim());
       });
 
       const response = await fetch("/api/generate", {
@@ -315,6 +361,21 @@ export default function Home() {
 
       const result = await response.json();
       console.log("Job created:", result);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/3547cde9-a9d2-4669-a991-f1254aa07bed',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          sessionId:'debug-session',
+          runId:'pre-fix',
+          hypothesisId:'H1',
+          location:'web/app/page.tsx:316',
+          message:'handleSubmit job created',
+          data:{jobId: result.jobId, fileName: selectedFile?.name},
+          timestamp:Date.now()
+        })
+      }).catch(()=>{});
+      // #endregion
       setJobState({
         id: result.jobId,
         status: "pending",
@@ -332,6 +393,8 @@ export default function Home() {
     setSelectedFile(null);
     setBriefText("");
     setBriefFiles([]);
+    setPrototypeUrls(["", "", ""]);
+    setUrlErrors(["", "", ""]);
     setJobState(null);
     setIsProcessing(false);
   };
@@ -392,7 +455,7 @@ export default function Home() {
               Product Intelligence Engine
             </h1>
             <p className="text-[#161010] text-lg">
-              Convert your ZIP repository into a structured Product Requirements Document
+              Convert your ZIP repository or prototype links into a structured Product Requirements Document
             </p>
           </div>
 
@@ -402,15 +465,56 @@ export default function Home() {
               <div>
                 <label className="block text-sm font-semibold text-[#161010] mb-3">
                   Upload Repository ZIP File{" "}
-                  <span className="text-[#F24B57]">*</span>
+                  <span className="text-[#161010] font-normal text-xs opacity-70">(Optional if URLs provided)</span>
                 </label>
                 <p className="text-xs text-[#161010] mb-3 opacity-80">
-                  Required: Upload your repository as a ZIP file
+                  Upload your repository as a ZIP file, or provide prototype URLs below
                 </p>
                 <FileUpload
                   onFileSelect={setSelectedFile}
                   selectedFile={selectedFile}
                 />
+              </div>
+
+              {/* Prototype URLs Section */}
+              <div className="space-y-4 border-t border-[#E7E1E2] pt-6">
+                <div>
+                  <label className="block text-sm font-semibold text-[#161010] mb-2">
+                    Prototype URLs{" "}
+                    <span className="text-[#161010] font-normal text-xs opacity-70">(Up to 3, optional if ZIP provided)</span>
+                  </label>
+                  <p className="text-xs text-[#161010] mb-3 opacity-80">
+                    Add links to your live prototype, app, or design mockups for analysis
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {prototypeUrls.map((url, index) => (
+                      <div key={index}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-[#161010] opacity-70 min-w-[60px]">
+                            URL {index + 1}:
+                          </span>
+                          <div className="flex-1">
+                            <input
+                              type="url"
+                              value={url}
+                              onChange={(e) => handleUrlChange(index, e.target.value)}
+                              placeholder={`https://example.com/prototype${index > 0 ? `-${index + 1}` : ''}`}
+                              className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-[#F24B57] transition-all text-[#161010] placeholder:text-[#161010]/50 ${
+                                urlErrors[index] 
+                                  ? 'border-[#F24B57] focus:border-[#F24B57]' 
+                                  : 'border-[#E7E1E2] focus:border-[#F24B57]'
+                              }`}
+                            />
+                            {urlErrors[index] && (
+                              <p className="text-xs text-[#F24B57] mt-1">{urlErrors[index]}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Brief Section */}
@@ -444,7 +548,7 @@ export default function Home() {
               {/* Submit Button */}
               <button
                 onClick={handleSubmit}
-                disabled={!selectedFile || isProcessing}
+                disabled={(!selectedFile && prototypeUrls.every(url => !url.trim())) || isProcessing}
                 className="w-full bg-[#F24B57] text-white py-4 px-6 rounded-lg font-semibold hover:bg-[#F24B57]/90 disabled:bg-[#E7E1E2] disabled:text-[#161010]/50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none"
               >
                 {isProcessing ? "Processing..." : "Generate PRD"}
