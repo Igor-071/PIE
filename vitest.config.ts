@@ -14,14 +14,15 @@ export default defineConfig({
       'dist', 
       'web',
       'src/**/*.js', // Exclude compiled JS files in src
-      // Exclude empty test files
-      'test/prdGenerator.test.ts',
+      // Exclude empty/problematic test files (keep list minimal)
       'test/tier1Extractor.test.ts',
       'test/tier2Agent.test.ts',
       // Temporarily exclude problematic tests (compiled .js files in src/ cause issues)
       'test/tier2Agent.graceful-degradation.test.ts',
       'test/integration/pipeline.test.ts',
     ],
+    // Use a non-worker pool to avoid tinypool termination issues in some environments
+    pool: 'typescript',
     testTimeout: 30000,
     coverage: {
       provider: 'v8',

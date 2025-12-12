@@ -1,11 +1,27 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { PrdJson, QuestionsForClient } from "../models/schema.js";
+
+/**
+ * Helper function to safely convert a value to an array
+ * Handles cases where AI returns a string instead of an array
+ */
+function ensureArray(value: any): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    // Split by common delimiters
+    return value.split(/[,;]\s*/).filter((s: string) => s.trim().length > 0);
+  }
+  return [String(value)];
+}
 
 export interface PrdArtifactsOptions {
   outputDir: string;
   projectName: string;
   templatePath?: string;
+  includeTemplateInstructions?: boolean;
 }
 
 /**
@@ -35,7 +51,7 @@ export async function writePrdArtifacts(
   await fs.writeFile(questionsPath, JSON.stringify(questions, null, 2), "utf-8");
 
   // Generate and write Markdown PRD
-  const markdownContent = await generatePrdMarkdown(prd, options);
+  const markdownContent = await generatePrdMarkdown(prd, options, questions);
   const projectNameForFile = prd.project?.name || options.projectName;
   const sanitizedProjectName = projectNameForFile
     .toLowerCase()
@@ -45,11 +61,173 @@ export async function writePrdArtifacts(
   const markdownPath = path.join(options.outputDir, markdownFilename);
   await fs.writeFile(markdownPath, markdownContent, "utf-8");
 
+  // Write candidate contract artifacts (best-effort)
+  await writeCandidateContractArtifacts(prd, options.outputDir).catch((err) => {
+    console.warn("[prdGenerator] Failed to write contract artifacts:", err);
+  });
+
   console.log(`PRD written to: ${markdownPath}`);
   console.log(`Structured JSON written to: ${jsonPath}`);
   console.log(`Questions written to: ${questionsPath}`);
 
   return { markdownFilename };
+}
+
+async function writeCandidateContractArtifacts(prd: PrdJson, outputDir: string): Promise<void> {
+  const contractsDir = path.join(outputDir, "contracts");
+  await fs.mkdir(contractsDir, { recursive: true });
+
+  // 1) OpenAPI candidate (JSON)
+  const openApi = generateOpenApiCandidate(prd);
+  await fs.writeFile(path.join(contractsDir, "openapi.candidate.json"), JSON.stringify(openApi, null, 2), "utf-8");
+
+  // 2) RBAC candidate
+  const rbac = generateRbacCandidate(prd);
+  await fs.writeFile(path.join(contractsDir, "rbac.candidate.json"), JSON.stringify(rbac, null, 2), "utf-8");
+
+  // 3) JSON Schemas from data model
+  const schemasDir = path.join(contractsDir, "schemas");
+  await fs.mkdir(schemasDir, { recursive: true });
+  const schemas = generateDataModelSchemas(prd);
+  for (const [name, schema] of Object.entries(schemas)) {
+    await fs.writeFile(path.join(schemasDir, `${sanitizeFileSegment(name)}.schema.json`), JSON.stringify(schema, null, 2), "utf-8");
+  }
+
+  // 4) Contract gaps
+  const gaps = generateContractGaps(prd, openApi, rbac, schemas);
+  await fs.writeFile(path.join(contractsDir, "CONTRACT_GAPS.md"), gaps, "utf-8");
+}
+
+function sanitizeFileSegment(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9._-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "unknown";
+}
+
+function generateOpenApiCandidate(prd: PrdJson): any {
+  const title = prd.project?.name || "API";
+  const version = prd.project?.version || "1.0.0";
+
+  const paths: Record<string, any> = {};
+  (prd.api || []).forEach((ep: any) => {
+    const method = (ep.method || "GET").toLowerCase();
+    const route = ep.endpoint || ep.name;
+    if (!route) return;
+    if (!paths[route]) paths[route] = {};
+    paths[route][method] = {
+      summary: ep.name || `${ep.method} ${ep.endpoint}`,
+      description: ep.description || "TBD",
+      security: ep.authRequired ? [{ bearerAuth: [] }] : [],
+      requestBody: ep.payloadFields
+        ? {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: Object.fromEntries(ep.payloadFields.map((f: string) => [f, { type: "string" }])) },
+              },
+            },
+          }
+        : undefined,
+      responses: {
+        "200": {
+          description: "TBD",
+          content: {
+            "application/json": {
+              schema: ep.responseFields
+                ? { type: "object", properties: Object.fromEntries(ep.responseFields.map((f: string) => [f, { type: "string" }])) }
+                : { type: "object" },
+            },
+          },
+        },
+      },
+    };
+  });
+
+  return {
+    openapi: "3.0.0",
+    info: { title, version },
+    paths,
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      },
+    },
+  };
+}
+
+function generateRbacCandidate(prd: PrdJson): any {
+  const roles = prd.roleDefinition?.roles || [];
+  const accessMatrix = prd.roleDefinition?.accessMatrix || [];
+  return {
+    roles,
+    accessMatrix,
+  };
+}
+
+function generateDataModelSchemas(prd: PrdJson): Record<string, any> {
+  const schemas: Record<string, any> = {};
+  const dm: any = prd.dataModel;
+  if (!dm) return schemas;
+
+  const entities = dm.entities ? dm.entities : dm; // enhanced vs legacy
+  for (const [entityName, entity] of Object.entries<any>(entities || {})) {
+    const fields = entity.fields || {};
+    const required: string[] = [];
+    const properties: Record<string, any> = {};
+    for (const [fieldName, field] of Object.entries<any>(fields)) {
+      const type = mapToJsonSchemaType(field.type);
+      properties[fieldName] = { type };
+      if (field.description) properties[fieldName].description = field.description;
+      if (field.required) required.push(fieldName);
+    }
+    schemas[entityName] = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      title: entityName,
+      type: "object",
+      additionalProperties: false,
+      properties,
+      required: required.length ? required : undefined,
+    };
+  }
+  return schemas;
+}
+
+function mapToJsonSchemaType(type: string | undefined): string {
+  const t = (type || "string").toLowerCase();
+  if (t.includes("int") || t === "number" || t === "float" || t === "double") return "number";
+  if (t === "boolean" || t === "bool") return "boolean";
+  if (t === "array" || t.endsWith("[]")) return "array";
+  if (t === "object" || t === "json") return "object";
+  return "string";
+}
+
+function generateContractGaps(
+  prd: PrdJson,
+  openApi: any,
+  rbac: any,
+  schemas: Record<string, any>
+): string {
+  const gaps: string[] = [];
+
+  if (!prd.api || prd.api.length === 0) gaps.push("- No API endpoints detected in PRD JSON.");
+  if (prd.api?.some((e: any) => !e.payloadFields && !e.responseFields)) gaps.push("- Some endpoints are missing request/response field definitions (candidate OpenAPI uses placeholders).");
+  if (!prd.roleDefinition?.roles?.length) gaps.push("- No roles defined; RBAC contract is incomplete.");
+  if (!prd.roleDefinition?.accessMatrix?.length) gaps.push("- No access matrix defined; RBAC permissions are incomplete.");
+  if (!Object.keys(schemas).length) gaps.push("- No data models available; schema contracts were not generated.");
+
+  const title = prd.project?.name || "Project";
+  return [
+    `# Contract Gaps for ${title}`,
+    "",
+    "This file lists missing or inferred contract details that should be confirmed for implementation.",
+    "",
+    gaps.length ? gaps.join("\n") : "- No obvious gaps detected (best-effort).",
+    "",
+    "## Generated files",
+    "",
+    "- `openapi.candidate.json`",
+    "- `rbac.candidate.json`",
+    "- `schemas/*.schema.json`",
+    "",
+  ].join("\n");
 }
 
 // ============================================================================
@@ -316,1074 +494,1349 @@ function generateAnalyticsMonitoringSection(analytics: any): string {
 }
 
 /**
+ * Strips HTML comments from template content
+ * @param content - Template content with HTML comments
+ * @returns Content with HTML comments removed
+ */
+function stripHtmlComments(content: string): string {
+  // Remove HTML comments (<!-- ... -->) including multi-line ones
+  return content.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+/**
  * Generates a comprehensive markdown PRD from the JSON data
  * @param prd - The complete PRD JSON data
- * @param options - Options including template path
+ * @param options - Options including template path and instruction inclusion
+ * @param questions - Questions for client (used for open questions section)
  * @returns Promise resolving to markdown string
  */
 async function generatePrdMarkdown(
   prd: PrdJson,
-  options: PrdArtifactsOptions
+  options: PrdArtifactsOptions,
+  questions: QuestionsForClient
 ): Promise<string> {
-  const projectName = prd.project?.name || options.projectName;
-
-  let markdown = `# Product Requirements Document: ${projectName}\n\n`;
-
-  // ============================================================================
-  // DOCUMENT METADATA
-  // ============================================================================
-  if (prd.documentMetadata) {
-    markdown += `## Document Metadata\n\n`;
-    markdown += `| Field | Value |\n`;
-    markdown += `|-------|-------|\n`;
-    if (prd.documentMetadata.documentOwner) {
-      markdown += `| Document Owner | ${prd.documentMetadata.documentOwner} |\n`;
-    }
-    if (prd.documentMetadata.stakeholders && prd.documentMetadata.stakeholders.length > 0) {
-      markdown += `| Stakeholders | ${prd.documentMetadata.stakeholders.join(", ")} |\n`;
-    }
-    if (prd.documentMetadata.collaborators && prd.documentMetadata.collaborators.length > 0) {
-      markdown += `| Collaborators | ${prd.documentMetadata.collaborators.join(", ")} |\n`;
-    }
-    if (prd.documentMetadata.referenceDocuments && prd.documentMetadata.referenceDocuments.length > 0) {
-      markdown += `| Reference Documents | ${prd.documentMetadata.referenceDocuments.join(", ")} |\n`;
-    }
-    if (prd.documentMetadata.jiraLink) {
-      markdown += `| JIRA Link | ${prd.documentMetadata.jiraLink} |\n`;
-    }
-    if (prd.documentMetadata.trdLink) {
-      markdown += `| TRD Link | ${prd.documentMetadata.trdLink} |\n`;
-    }
-    markdown += `| Last Updated | ${prd.documentMetadata.lastUpdated || new Date().toLocaleDateString()} |\n`;
-    markdown += `| Status | ${prd.documentMetadata.status || "Draft"} |\n\n`;
-    markdown += `---\n\n`;
-  }
-
-  // ============================================================================
-  // TABLE OF CONTENTS
-  // ============================================================================
-  markdown += `## Table of Contents\n\n`;
-  markdown += `1. [Summary](#1-summary)\n`;
-  markdown += `2. [Brand Foundations](#2-brand-foundations)\n`;
-  markdown += `3. [Problem Statement & User Needs](#3-problem-statement--user-needs)\n`;
-  markdown += `4. [Solution Overview](#4-solution-overview)\n`;
-  markdown += `5. [Target Audience & Personas](#5-target-audience--personas)\n`;
-  markdown += `6. [Lean Canvas](#6-lean-canvas)\n`;
-  markdown += `7. [Competitive Analysis](#7-competitive-analysis)\n`;
-  markdown += `8. [Goals & Success Criteria](#8-goals--success-criteria)\n`;
-  markdown += `9. [MVP Scope](#9-mvp-scope)\n`;
-  markdown += `10. [Assumptions](#10-assumptions)\n`;
-  markdown += `11. [Dependencies](#11-dependencies)\n`;
-  markdown += `12. [Role Definition / Access Model](#12-role-definition--access-model)\n`;
-  markdown += `13. [Product Requirements / Acceptance Criteria](#13-product-requirements--acceptance-criteria)\n`;
-  markdown += `14. [User Interaction and Design](#14-user-interaction-and-design)\n`;
-  markdown += `15. [Technical Requirements](#15-technical-requirements)\n`;
-  markdown += `16. [Non-Functional Requirements (NFRs)](#16-non-functional-requirements-nfrs)\n`;
-  markdown += `17. [Risk Management](#17-risk-management)\n`;
-  markdown += `18. [Open Questions & Decisions](#18-open-questions--decisions)\n`;
+  let template = await loadPrdTemplate(options.templatePath);
   
-  // Add enhanced sections to TOC if they exist
-  if (prd.deliveryTimeline) markdown += `19. [Delivery Timeline & Cost](#19-delivery-timeline--cost)\n`;
-  if (prd.launchPlan) markdown += `20. [Launch Plan](#20-launch-plan)\n`;
-  if (prd.stakeholdersAndRaci) markdown += `21. [Stakeholders, Roles & RACI](#21-stakeholders-roles--raci)\n`;
-  if (prd.designRequirements) markdown += `22. [Design Requirements](#22-design-requirements)\n`;
-  if (prd.dataModel) markdown += `23. [Data Models](#23-data-models)\n`;
-  if (prd.testingStrategy) markdown += `24. [Testing Strategy](#24-testing-strategy)\n`;
-  if (prd.deploymentStrategy) markdown += `25. [Deployment Strategy](#25-deployment-strategy)\n`;
-  if (prd.analyticsAndMonitoring) markdown += `26. [Analytics & Monitoring Requirements](#26-analytics--monitoring-requirements)\n`;
-  if (prd.screens && prd.screens.length > 0) markdown += `27. [Screens & User Interface](#27-screens--user-interface)\n`;
-  if (prd.navigation && prd.navigation.length > 0) markdown += `28. [Navigation Structure](#28-navigation-structure)\n`;
-  if (prd.api && prd.api.length > 0) markdown += `29. [API Endpoints](#29-api-endpoints)\n`;
-  if (prd.events && prd.events.length > 0) markdown += `30. [User Interactions & Events](#30-user-interactions--events)\n`;
-  if (prd.aiMetadata?.stackDetected && prd.aiMetadata.stackDetected.length > 0) markdown += `31. [Technical Stack](#31-technical-stack)\n`;
-  if (prd.glossary) markdown += `32. [Glossary](#32-glossary)\n`;
-  markdown += `33. [Change Log](#33-change-log)\n`;
-  markdown += `34. [Appendix: AI Extraction Metadata](#appendix-ai-extraction-metadata)\n\n`;
-  markdown += `---\n\n`;
-
-  // ============================================================================
-  // 1. SUMMARY & PROJECT INFO
-  // ============================================================================
-  markdown += `## 1. Summary\n\n`;
-  markdown += `**Project Name:** ${projectName}\n`;
-  markdown += `**Version:** ${prd.project?.version || "1.0.0"}\n`;
-  markdown += `**Created:** ${new Date(prd.project?.createdAt || Date.now()).toLocaleDateString()}\n\n`;
-
-  if (prd.solutionOverview?.valueProposition) {
-    markdown += `### Value Proposition\n${prd.solutionOverview.valueProposition}\n\n`;
+  // Strip HTML comments if not including template instructions
+  if (!options.includeTemplateInstructions) {
+    template = stripHtmlComments(template);
   }
 
-  // ============================================================================
-  // 2. BRAND FOUNDATIONS
-  // ============================================================================
-  if (prd.brandFoundations) {
-    markdown += `## 2. Brand Foundations\n\n`;
-    
-    if (prd.brandFoundations.mission) {
-      markdown += `### Mission\n${prd.brandFoundations.mission}\n\n`;
-    }
-    
-    if (prd.brandFoundations.vision) {
-      markdown += `### Vision\n${prd.brandFoundations.vision}\n\n`;
-    }
-    
-    if (prd.brandFoundations.coreValues && Array.isArray(prd.brandFoundations.coreValues) && prd.brandFoundations.coreValues.length > 0) {
-      markdown += `### Core Values\n`;
-      prd.brandFoundations.coreValues.forEach((value) => {
-        markdown += `- ${value}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.brandFoundations.toneOfVoice) {
-      markdown += `### Tone of Voice\n${prd.brandFoundations.toneOfVoice}\n\n`;
-    }
+  const projectName = prd.project?.name || options.projectName || "Project";
+  const doc = prd.documentMetadata || {};
+  const isGoldTemplate = template.includes("## 0. Document Metadata") || template.includes("Gold Standard Product Requirements Document");
+
+  // Use gold template variables if gold template detected, otherwise use legacy
+  const vars: Record<string, string> = isGoldTemplate
+    ? buildGoldTemplateVars(prd, options, questions)
+    : buildLegacyTemplateVars(prd, options);
+
+  return renderTemplate(template, vars);
+}
+
+/**
+ * Builds variables for gold standard template
+ */
+function buildGoldTemplateVars(
+  prd: PrdJson,
+  options: PrdArtifactsOptions,
+  questions: QuestionsForClient
+): Record<string, string> {
+  const projectName = prd.project?.name || options.projectName || "Project";
+  const doc = prd.documentMetadata || {};
+  const lastUpdated = doc.lastUpdated || new Date().toLocaleDateString();
+  const sourceInputs = prd.aiMetadata?.extractionNotes
+    ? (Array.isArray(prd.aiMetadata.extractionNotes) 
+        ? prd.aiMetadata.extractionNotes.join(", ")
+        : prd.aiMetadata.extractionNotes)
+    : "Git Repo / ZIP / URLs";
+
+  return {
+    // 0. Document Metadata
+    productName: projectName,
+    prdVersion: prd.project?.version || "1.0.0",
+    status: doc.status || "Draft",
+    documentOwner: doc.documentOwner || "TBD",
+    stakeholders: doc.stakeholders?.length ? doc.stakeholders.join(", ") : "TBD",
+    sourceInputs,
+    lastUpdated,
+    linkedArtifacts: [
+      doc.trdLink ? "TRD" : null,
+      doc.jiraLink ? "Jira" : null,
+      doc.referenceDocuments?.length ? "Reference Documents" : null,
+    ].filter(Boolean).join(", ") || "TBD",
+
+    // 1. Executive Summary
+    executiveSummary: renderExecutiveSummary(prd),
+
+    // 2. Brand & Product Foundations
+    brandFoundations: renderBrandFoundations(prd),
+
+    // 3.1 Primary Problem
+    primaryProblem: renderPrimaryProblem(prd),
+
+    // 4. User & Stakeholder Landscape
+    primaryPersonas: renderPrimaryPersonas(prd),
+    secondaryPersonas: renderSecondaryPersonas(prd),
+    internalStakeholders: renderInternalStakeholders(prd),
+
+    // 5. Value Proposition & Solution Overview
+    valueProposition: renderValueProposition(prd),
+
+    // 6. Strategic Model
+    strategicModel: renderStrategicModel(prd),
+
+    // 7. Goals, Success Metrics & KPIs
+    productGoals: renderProductGoals(prd),
+    successMetrics: renderSuccessMetrics(prd),
+
+    // 8. Scope Definition
+    mvpInScope: renderMvpInScope(prd),
+    mvpOutOfScope: renderMvpOutOfScope(prd),
+
+    // 9. Functional Requirements & Acceptance Criteria
+    functionalRequirements: renderFunctionalRequirements(prd),
+
+    // 10. User Experience & Interaction Design
+    keyUserFlows: renderKeyUserFlows(prd),
+    navigationArchitecture: renderNavigationArchitecture(prd),
+
+    // 11. Data & Domain Model
+    dataDomainModel: renderDataDomainModel(prd),
+
+    // 12. Technical Constraints & Architecture
+    technicalConstraints: renderTechnicalConstraints(prd),
+
+    // 13. Non-Functional Requirements
+    nonFunctionalRequirements: renderNonFunctionalRequirementsGold(prd),
+
+    // 14. Dependencies & Assumptions
+    dependencies: renderDependenciesGold(prd),
+    assumptions: renderAssumptionsGold(prd),
+
+    // 15. Risk Management
+    riskManagement: renderRiskManagementGold(prd),
+
+    // 16. Delivery Plan & Cost
+    deliveryPlan: renderDeliveryPlan(prd),
+
+    // 17. Launch & Rollout Plan
+    launchPlan: renderLaunchPlanGold(prd),
+
+    // 18. Open Questions & Decisions Log
+    openQuestions: renderOpenQuestionsGold(prd, questions),
+
+    // 19. Change Log
+    changeLog: renderChangeLog(prd),
+
+    // 20. Appendix
+    appendix: renderAppendixGold(prd),
+  };
+}
+
+/**
+ * Builds variables for legacy template (backwards compatibility)
+ */
+function buildLegacyTemplateVars(
+  prd: PrdJson,
+  options: PrdArtifactsOptions
+): Record<string, string> {
+  const projectName = prd.project?.name || options.projectName || "Project";
+  const doc = prd.documentMetadata || {};
+
+  return {
+    projectName,
+    documentOwner: doc.documentOwner || "TBD",
+    stakeholders: doc.stakeholders?.length ? doc.stakeholders.join(", ") : "TBD",
+    collaborators: doc.collaborators?.length ? doc.collaborators.join(", ") : "TBD",
+    referenceDocuments: doc.referenceDocuments?.length ? doc.referenceDocuments.join(", ") : "TBD",
+    jiraLink: doc.jiraLink || "TBD",
+    trdLink: doc.trdLink || "TBD",
+
+    tableOfContents: renderArcaStyleToc(),
+    summary: renderSummary(prd),
+    problemStatementAndOutcomes: renderProblemStatementAndOutcomes(prd),
+    goalsAndSuccessCriteria: renderGoalsAndSuccessCriteria(prd),
+    mvpScope: renderMvpScope(prd),
+    targetAudience: renderTargetAudience(prd),
+    assumptions: renderAssumptions(prd),
+    dependencies: renderDependencies(prd),
+    roleDefinition: renderRoleDefinition(prd),
+    productRequirements: renderProductRequirementsTable(prd),
+    dependencyMapping: renderDependencyMapping(prd),
+    userInteractionAndDesign: renderUserInteractionAndDesign(prd),
+    technicalRequirements: renderTechnicalRequirements(prd),
+    nonFunctionalRequirements: renderNonFunctionalRequirements(prd),
+    riskManagement: renderRiskManagement(prd),
+    deliveryTimelineAndCost: renderDeliveryTimelineAndCost(prd),
+    launchPlan: renderLaunchPlan(prd),
+    stakeholdersRaci: renderStakeholdersRaci(prd),
+    openQuestionsAndDecisions: renderOpenQuestionsAndDecisions(prd),
+    changeLog: renderChangeLog(prd),
+    appendix: renderAppendix(prd),
+  };
+}
+
+async function loadPrdTemplate(templatePath?: string): Promise<string> {
+  const candidates: string[] = [];
+  if (templatePath) candidates.push(templatePath);
+
+  // Gold standard template is the default - search for it first
+  // Common runtime contexts:
+  // - CLI: cwd = repo root
+  // - Web: cwd = <repo>/web
+  candidates.push(path.resolve(process.cwd(), "templates", "PRD_GOLD_STANDARD.md"));
+  candidates.push(path.resolve(process.cwd(), "..", "templates", "PRD_GOLD_STANDARD.md"));
+
+  // Try relative to this module's location (dist or web/lib/pie-core)
+  try {
+    const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+    candidates.push(path.resolve(moduleDir, "..", "..", "templates", "PRD_GOLD_STANDARD.md"));
+    candidates.push(path.resolve(moduleDir, "..", "..", "..", "templates", "PRD_GOLD_STANDARD.md"));
+    candidates.push(path.resolve(moduleDir, "..", "..", "..", "..", "templates", "PRD_GOLD_STANDARD.md"));
+  } catch {
+    // ignore
   }
 
-  // ============================================================================
-  // 3. PROBLEM DEFINITION
-  // ============================================================================
-  if (prd.problemDefinition) {
-    markdown += `## 3. Problem Statement & User Needs\n\n`;
-    
-    if (prd.problemDefinition.primaryProblem) {
-      markdown += `### Primary Problem\n${prd.problemDefinition.primaryProblem}\n\n`;
-    }
-    
-    if (prd.problemDefinition.secondaryProblems) {
-      markdown += `### Secondary Problems\n`;
-      const problems = Array.isArray(prd.problemDefinition.secondaryProblems) 
-        ? prd.problemDefinition.secondaryProblems 
-        : [prd.problemDefinition.secondaryProblems];
-      problems.forEach((problem) => {
-        markdown += `- ${problem}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.problemDefinition.userPainPoints) {
-      markdown += `### User Pain Points\n`;
-      const painPoints = Array.isArray(prd.problemDefinition.userPainPoints)
-        ? prd.problemDefinition.userPainPoints
-        : [prd.problemDefinition.userPainPoints];
-      painPoints.forEach((pain) => {
-        markdown += `> "${pain}"\n\n`;
-      });
-    }
-    
-    if (prd.problemDefinition.businessImpact) {
-      markdown += `### Business Impact\n${prd.problemDefinition.businessImpact}\n\n`;
-    }
+  // Fallback to legacy template if gold standard not found
+  candidates.push(path.resolve(process.cwd(), "templates", "PRD_Template.md"));
+  candidates.push(path.resolve(process.cwd(), "..", "templates", "PRD_Template.md"));
+
+  try {
+    const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+    candidates.push(path.resolve(moduleDir, "..", "..", "templates", "PRD_Template.md"));
+    candidates.push(path.resolve(moduleDir, "..", "..", "..", "templates", "PRD_Template.md"));
+    candidates.push(path.resolve(moduleDir, "..", "..", "..", "..", "templates", "PRD_Template.md"));
+  } catch {
+    // ignore
   }
 
-  // ============================================================================
-  // 4. SOLUTION OVERVIEW
-  // ============================================================================
-  if (prd.solutionOverview) {
-    markdown += `## 4. Solution Overview\n\n`;
-    
-    if (prd.solutionOverview.keyFeatures) {
-      markdown += `### Key Features\n`;
-      const features = Array.isArray(prd.solutionOverview.keyFeatures)
-        ? prd.solutionOverview.keyFeatures
-        : [prd.solutionOverview.keyFeatures];
-      features.forEach((feature) => {
-        markdown += `- ${feature}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.solutionOverview.differentiators) {
-      markdown += `### Differentiators\n${prd.solutionOverview.differentiators}\n\n`;
-    }
-    
-    if (prd.solutionOverview.nonFunctionalRequirements) {
-      markdown += `### Non-Functional Requirements\n`;
-      const nfrs = Array.isArray(prd.solutionOverview.nonFunctionalRequirements)
-        ? prd.solutionOverview.nonFunctionalRequirements
-        : [prd.solutionOverview.nonFunctionalRequirements];
-      nfrs.forEach((req) => {
-        markdown += `- ${req}\n`;
-      });
-      markdown += `\n`;
-    }
-  }
-
-  // ============================================================================
-  // 5. TARGET AUDIENCE & PERSONAS
-  // ============================================================================
-  if (prd.targetAudience && prd.targetAudience.length > 0) {
-    markdown += `## 5. Target Audience & Personas\n\n`;
-    
-    prd.targetAudience.forEach((persona, index) => {
-      const enhancedPersona = persona as any;
-      markdown += `### Persona ${index + 1}: ${persona.name}\n\n`;
-      
-      if (persona.demographics) {
-        markdown += `**Demographics:**\n`;
-        if (typeof persona.demographics === 'object') {
-          Object.entries(persona.demographics).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-              markdown += `- ${key}: ${value.join(", ")}\n`;
-            } else {
-              markdown += `- ${key}: ${value}\n`;
-            }
-          });
-        } else {
-          markdown += `${persona.demographics}\n`;
-        }
-        markdown += `\n`;
-      }
-      
-      // Enhanced persona fields
-      if (enhancedPersona.techSavviness) {
-        markdown += `- Tech Savviness: ${enhancedPersona.techSavviness}\n`;
-      }
-      if (enhancedPersona.preferredCommunicationChannels && enhancedPersona.preferredCommunicationChannels.length > 0) {
-        markdown += `- Preferred Communication Channels: ${enhancedPersona.preferredCommunicationChannels.join(", ")}\n`;
-      }
-      markdown += `\n`;
-      
-      if (persona.goals) {
-        const goals = Array.isArray(persona.goals) ? persona.goals : [persona.goals];
-        markdown += `**Goals:**\n`;
-        goals.forEach((goal: string) => {
-          markdown += `- ${goal}\n`;
-        });
-        markdown += `\n`;
-      }
-      
-      if (persona.painPoints && Array.isArray(persona.painPoints) && persona.painPoints.length > 0) {
-        markdown += `**Pain Points:**\n`;
-        persona.painPoints.forEach((pain) => {
-          markdown += `> "${pain}"\n\n`;
-        });
-      }
-      
-      if (persona.jobsToBeDone && Array.isArray(persona.jobsToBeDone) && persona.jobsToBeDone.length > 0) {
-        markdown += `**Jobs to Be Done:**\n`;
-        persona.jobsToBeDone.forEach((job) => {
-          markdown += `- ${job}\n`;
-        });
-        markdown += `\n`;
-      }
-      
-      // Enhanced persona sections
-      if (enhancedPersona.userScenarios && enhancedPersona.userScenarios.length > 0) {
-        markdown += `**User Scenarios:**\n`;
-        enhancedPersona.userScenarios.forEach((scenario: string, idx: number) => {
-          markdown += `- **Scenario ${idx + 1}:** ${scenario}\n`;
-        });
-        markdown += `\n`;
-      }
-      
-      if (enhancedPersona.motivations && enhancedPersona.motivations.length > 0) {
-        markdown += `**Motivations:**\n`;
-        enhancedPersona.motivations.forEach((motivation: string) => {
-          markdown += `- ${motivation}\n`;
-        });
-        markdown += `\n`;
-      }
-      
-      if (enhancedPersona.frustrations && enhancedPersona.frustrations.length > 0) {
-        markdown += `**Frustrations:**\n`;
-        enhancedPersona.frustrations.forEach((frustration: string) => {
-          markdown += `- ${frustration}\n`;
-        });
-        markdown += `\n`;
-      }
-      
-      if (enhancedPersona.behavioralPatterns && enhancedPersona.behavioralPatterns.length > 0) {
-        markdown += `**Behavioral Patterns:**\n`;
-        enhancedPersona.behavioralPatterns.forEach((pattern: string) => {
-          markdown += `- ${pattern}\n`;
-        });
-        markdown += `\n`;
-      }
-    });
-  }
-
-  // ============================================================================
-  // 6. LEAN CANVAS
-  // ============================================================================
-  if (prd.leanCanvas) {
-    markdown += `## 6. Lean Canvas\n\n`;
-    
-    if (prd.leanCanvas.uniqueValueProposition) {
-      markdown += `### Unique Value Proposition\n${prd.leanCanvas.uniqueValueProposition}\n\n`;
-    }
-    
-    if (prd.leanCanvas.customerSegments && Array.isArray(prd.leanCanvas.customerSegments) && prd.leanCanvas.customerSegments.length > 0) {
-      markdown += `### Customer Segments\n`;
-      prd.leanCanvas.customerSegments.forEach((segment) => {
-        markdown += `- ${segment}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.leanCanvas.keyMetrics && Array.isArray(prd.leanCanvas.keyMetrics) && prd.leanCanvas.keyMetrics.length > 0) {
-      markdown += `### Key Metrics\n`;
-      prd.leanCanvas.keyMetrics.forEach((metric) => {
-        markdown += `- ${metric}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.leanCanvas.channels && Array.isArray(prd.leanCanvas.channels) && prd.leanCanvas.channels.length > 0) {
-      markdown += `### Channels\n`;
-      prd.leanCanvas.channels.forEach((channel) => {
-        markdown += `- ${channel}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.leanCanvas.revenueStreams && Array.isArray(prd.leanCanvas.revenueStreams) && prd.leanCanvas.revenueStreams.length > 0) {
-      markdown += `### Revenue Streams\n`;
-      prd.leanCanvas.revenueStreams.forEach((stream) => {
-        markdown += `- ${stream}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.leanCanvas.costStructure && Array.isArray(prd.leanCanvas.costStructure) && prd.leanCanvas.costStructure.length > 0) {
-      markdown += `### Cost Structure\n`;
-      prd.leanCanvas.costStructure.forEach((cost) => {
-        markdown += `- ${cost}\n`;
-      });
-      markdown += `\n`;
+  for (const candidate of candidates) {
+    try {
+      const content = await fs.readFile(candidate, "utf-8");
+      if (content.trim().length > 0) return content;
+    } catch {
+      continue;
     }
   }
 
-  // ============================================================================
-  // 7. COMPETITIVE ANALYSIS
-  // ============================================================================
-  if (prd.competitiveAnalysis) {
-    markdown += `## 7. Competitive Analysis\n\n`;
-    if (typeof prd.competitiveAnalysis === "string") {
-      markdown += `${prd.competitiveAnalysis}\n\n`;
+  // Last-resort fallback: minimal inline template.
+  return `# {{projectName}} PRD
+
+| **Document owner** | {{documentOwner}} |
+| --- | --- |
+| **Stakeholders / Client** | {{stakeholders}} |
+| **Collaborators / Consulted (Discovery and Design)** | {{collaborators}} |
+| **Reference documents** | {{referenceDocuments}} |
+| **Jira** | {{jiraLink}} |
+| **Technical Requirements Document** | {{trdLink}} |
+
+{{tableOfContents}}
+
+### **Summary**
+
+{{summary}}
+
+### **Problem Statement & Outcomes**
+
+{{problemStatementAndOutcomes}}
+
+### **Goals & Success Criteria**
+
+{{goalsAndSuccessCriteria}}
+
+### **MVP Scope**
+
+{{mvpScope}}
+
+### **Target Audience / Personas**
+
+{{targetAudience}}
+
+### **Assumptions**
+
+{{assumptions}}
+
+### **Dependencies**
+
+{{dependencies}}
+
+### **Role Definition / Access Model**
+
+{{roleDefinition}}
+
+### **Product Requirements / Acceptance Criteria**
+
+{{productRequirements}}
+
+#### Dependency mapping
+
+{{dependencyMapping}}
+
+### **User Interaction and Design**
+
+{{userInteractionAndDesign}}
+
+### **Technical Requirements**
+
+{{technicalRequirements}}
+
+### **Non-Functional Requirements**
+
+{{nonFunctionalRequirements}}
+
+### **Risk Management**
+
+{{riskManagement}}
+
+### **Delivery timeline & cost**
+
+{{deliveryTimelineAndCost}}
+
+### **Launch Plan**
+
+{{launchPlan}}
+
+### **Stakeholders, Roles & RACI**
+
+{{stakeholdersRaci}}
+
+### **Open Questions & Decisions**
+
+{{openQuestionsAndDecisions}}
+
+### **Change log**
+
+{{changeLog}}
+
+### **Appendix**
+
+{{appendix}}
+`;
+}
+
+function renderTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
+    if (Object.prototype.hasOwnProperty.call(vars, key)) {
+      return vars[key] ?? "";
+    }
+    return "";
+  });
+}
+
+// ============================================================================
+// GOLD TEMPLATE RENDER FUNCTIONS
+// ============================================================================
+
+function renderExecutiveSummary(prd: PrdJson): string {
+  const overview = prd.executiveSummary?.overview || prd.solutionOverview?.valueProposition;
+  const highlights = prd.executiveSummary?.solutionHighlights;
+  if (overview) {
+    return highlights ? `${overview}\n\n${highlights}` : overview;
+  }
+  return "TBD";
+}
+
+function renderBrandFoundations(prd: PrdJson): string {
+  const bf = prd.brandFoundations;
+  if (!bf) return "TBD";
+  
+  const parts: string[] = [];
+  if (bf.mission) parts.push(`- **Mission:** ${bf.mission}`);
+  if (bf.vision) parts.push(`- **Vision:** ${bf.vision}`);
+  if (bf.brandPromise) parts.push(`- **Product Promise:** ${bf.brandPromise}`);
+  const coreValues = ensureArray(bf.coreValues);
+  if (coreValues.length) {
+    parts.push(`- **Core Values:** ${coreValues.join(", ")}`);
+  }
+  
+  if (bf.toneOfVoice) {
+    // Handle both array and string cases (AI sometimes returns string instead of array)
+    const toneOfVoiceText = Array.isArray(bf.toneOfVoice) 
+      ? bf.toneOfVoice.join(", ")
+      : bf.toneOfVoice;
+    parts.push(`- **Tone of Voice:** ${toneOfVoiceText}`);
+  }
+  if (bf.brandEthos) {
+    parts.push(`- **What This Product Is Not:** ${bf.brandEthos}`);
+  }
+  
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderPrimaryProblem(prd: PrdJson): string {
+  const pd = prd.problemDefinition;
+  if (!pd?.primaryProblem) return "TBD";
+  
+  const parts: string[] = [pd.primaryProblem];
+  if (pd.context) parts.push(`\n**Context:** ${pd.context}`);
+  if (pd.businessImpact) parts.push(`\n**Business Impact:** ${pd.businessImpact}`);
+  
+  if (pd.outcomes) {
+    parts.push(`\n**Expected Outcomes:**`);
+    // Handle both array and string cases (AI sometimes returns string instead of array)
+    if (Array.isArray(pd.outcomes)) {
+      parts.push(...pd.outcomes.map((o: string) => `- ${o}`));
     } else {
-      if (prd.competitiveAnalysis.marketCategory) {
-        markdown += `### Market Category\n${prd.competitiveAnalysis.marketCategory}\n\n`;
-      }
-      
-      // Enhanced competitive analysis with proper table format
-      const enhancedComp = prd.competitiveAnalysis as any;
-      if (enhancedComp.competitors && Array.isArray(enhancedComp.competitors)) {
-        // Check if it's enhanced format with Competitor objects
-        if (enhancedComp.competitors.length > 0 && typeof enhancedComp.competitors[0] === 'object' && enhancedComp.competitors[0].name) {
-          markdown += `### Competitors\n\n`;
-          markdown += `| Competitor Name | Strengths | Weaknesses | Market Position | Key Differentiators |\n`;
-          markdown += `|----------------|-----------|------------|-----------------|---------------------|\n`;
-          enhancedComp.competitors.forEach((comp: any) => {
-            const strengths = comp.strengths ? comp.strengths.join(", ") : "-";
-            const weaknesses = comp.weaknesses ? comp.weaknesses.join(", ") : "-";
-            const marketPosition = comp.marketPosition || "-";
-            const differentiators = comp.keyDifferentiators ? comp.keyDifferentiators.join(", ") : "-";
-            markdown += `| ${comp.name} | ${strengths} | ${weaknesses} | ${marketPosition} | ${differentiators} |\n`;
-          });
-          markdown += `\n`;
-        } else {
-          // Legacy format - simple list
-          markdown += `### Competitors\n`;
-          enhancedComp.competitors.forEach((comp: any) => {
-            markdown += `- ${comp}\n`;
-          });
-          markdown += `\n`;
-        }
-      }
-      
-      if (prd.competitiveAnalysis.positioningSummary) {
-        markdown += `### Positioning Summary\n${prd.competitiveAnalysis.positioningSummary}\n\n`;
-      }
+      // If it's a string, treat each line or sentence as a separate outcome
+      const outcomesValue = pd.outcomes as any;
+      const outcomesList: string[] = typeof outcomesValue === 'string' 
+        ? outcomesValue.split(/[.;]\s*/).filter((s: string) => s.trim().length > 0)
+        : [String(outcomesValue)];
+      parts.push(...outcomesList.map((o: string) => `- ${o.trim()}`));
     }
-  }
-
-  // ============================================================================
-  // 8. GOALS & SUCCESS CRITERIA
-  // ============================================================================
-  if (prd.goalsAndSuccessCriteria) {
-    markdown += `## 8. Goals & Success Criteria\n\n`;
-    
-    if (prd.goalsAndSuccessCriteria.primaryGoals && prd.goalsAndSuccessCriteria.primaryGoals.length > 0) {
-      markdown += `### Primary Goals\n\n`;
-      prd.goalsAndSuccessCriteria.primaryGoals.forEach((goal, index) => {
-        markdown += `${index + 1}. ${goal}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.goalsAndSuccessCriteria.successMetrics && prd.goalsAndSuccessCriteria.successMetrics.length > 0) {
-      markdown += `### Success Metrics (KPIs)\n\n`;
-      // Check if enhanced format (with baseline, owner, etc.)
-      const firstMetric = prd.goalsAndSuccessCriteria.successMetrics[0] as any;
-      if (firstMetric.baseline || firstMetric.owner) {
-        // Enhanced format
-        markdown += `| Metric | Description | Baseline | Target | Measurement Method | Data Source | Owner | Measurement Frequency | Review Cadence |\n`;
-        markdown += `|--------|-------------|----------|--------|---------------------|-------------|-------|----------------------|---------------|\n`;
-        prd.goalsAndSuccessCriteria.successMetrics.forEach((metric: any) => {
-          markdown += `| ${metric.name} | ${metric.description} | ${metric.baseline || "-"} | ${metric.target || "-"} | ${metric.measurementMethod || "-"} | ${metric.dataSource || "-"} | ${metric.owner || "-"} | ${metric.measurementFrequency || "-"} | ${metric.reviewCadence || "-"} |\n`;
-        });
-      } else {
-        // Standard format
-        markdown += `| Metric | Description | Target | Measurement Method |\n`;
-        markdown += `|--------|-------------|--------|---------------------|\n`;
-        prd.goalsAndSuccessCriteria.successMetrics.forEach((metric) => {
-          markdown += `| ${metric.name} | ${metric.description} | ${metric.target || "-"} | ${metric.measurementMethod || "-"} |\n`;
-        });
-      }
-      markdown += `\n`;
-    }
-    
-    if (prd.goalsAndSuccessCriteria.kpis && prd.goalsAndSuccessCriteria.kpis.length > 0) {
-      markdown += `### Key Performance Indicators\n\n`;
-      prd.goalsAndSuccessCriteria.kpis.forEach((kpi) => {
-        markdown += `- ${kpi}\n`;
-      });
-      markdown += `\n`;
-    }
-  }
-
-  // ============================================================================
-  // 9. MVP SCOPE
-  // ============================================================================
-  if (prd.mvpScope) {
-    markdown += `## 9. MVP Scope (Phase ${prd.mvpScope.phase || "1"})\n\n`;
-    
-    if (prd.mvpScope.features && prd.mvpScope.features.length > 0) {
-      markdown += `### Features Included\n\n`;
-      prd.mvpScope.features.forEach((feature) => {
-        markdown += `#### ${feature.name}\n\n`;
-        markdown += `**Description:** ${feature.description}\n\n`;
-        markdown += `**Priority:** ${feature.priority}\n\n`;
-        if (feature.screens && feature.screens.length > 0) {
-          markdown += `**Screens:** ${feature.screens.join(", ")}\n\n`;
-        }
-        if (feature.dependencies && feature.dependencies.length > 0) {
-          markdown += `**Dependencies:** ${feature.dependencies.join(", ")}\n\n`;
-        }
-      });
-    }
-    
-    if (prd.mvpScope.outOfScope && prd.mvpScope.outOfScope.length > 0) {
-      markdown += `### Out of Scope\n\n`;
-      prd.mvpScope.outOfScope.forEach((item) => {
-        markdown += `- ${item}\n`;
-      });
-      markdown += `\n`;
-    }
-  }
-
-  // ============================================================================
-  // 10. ASSUMPTIONS
-  // ============================================================================
-  if (prd.assumptions) {
-    markdown += `## 10. Assumptions\n\n`;
-    
-    if (prd.assumptions.technical && prd.assumptions.technical.length > 0) {
-      markdown += `### Technical Assumptions\n\n`;
-      prd.assumptions.technical.forEach((assumption) => {
-        markdown += `- ${assumption}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.assumptions.operational && prd.assumptions.operational.length > 0) {
-      markdown += `### Operational Assumptions\n\n`;
-      prd.assumptions.operational.forEach((assumption) => {
-        markdown += `- ${assumption}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.assumptions.financial && prd.assumptions.financial.length > 0) {
-      markdown += `### Financial Assumptions\n\n`;
-      prd.assumptions.financial.forEach((assumption) => {
-        markdown += `- ${assumption}\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.assumptions.legal && prd.assumptions.legal.length > 0) {
-      markdown += `### Legal/Compliance Assumptions\n\n`;
-      prd.assumptions.legal.forEach((assumption) => {
-        markdown += `- ${assumption}\n`;
-      });
-      markdown += `\n`;
-    }
-  }
-
-  // ============================================================================
-  // 11. DEPENDENCIES
-  // ============================================================================
-  if (prd.dependencies) {
-    markdown += `## 11. Dependencies\n\n`;
-    
-    if (prd.dependencies.service && prd.dependencies.service.length > 0) {
-      markdown += `### Service Dependencies\n\n`;
-      prd.dependencies.service.forEach((dep: any) => {
-        const enhancedDep = dep as any;
-        markdown += `#### ${dep.name}\n\n`;
-        markdown += `**Description:** ${dep.description}\n\n`;
-        if (dep.impact) {
-          markdown += `**Impact:** ${dep.impact}\n\n`;
-        }
-        // Enhanced dependency fields
-        if (enhancedDep.slaRequirements) {
-          markdown += `**SLA Requirements:**\n${enhancedDep.slaRequirements}\n\n`;
-        }
-        if (enhancedDep.versionConstraints) {
-          markdown += `**Version Constraints:**\n${enhancedDep.versionConstraints}\n\n`;
-        }
-        if (enhancedDep.fallbackOptions && enhancedDep.fallbackOptions.length > 0) {
-          markdown += `**Fallback Options:**\n`;
-          enhancedDep.fallbackOptions.forEach((option: string) => {
-            markdown += `- ${option}\n`;
-          });
-          markdown += `\n`;
-        }
-        if (enhancedDep.supportContact) {
-          markdown += `**Support Contact:** ${enhancedDep.supportContact}\n\n`;
-        }
-      });
-    }
-    
-    if (prd.dependencies.operational && prd.dependencies.operational.length > 0) {
-      markdown += `### Operational Dependencies\n\n`;
-      prd.dependencies.operational.forEach((dep) => {
-        markdown += `- ${dep.description}`;
-        if (dep.requirement) {
-          markdown += ` (Requirement: ${dep.requirement})`;
-        }
-        markdown += `\n`;
-      });
-      markdown += `\n`;
-    }
-    
-    if (prd.dependencies.content && prd.dependencies.content.length > 0) {
-      markdown += `### Content & Legal Dependencies\n\n`;
-      prd.dependencies.content.forEach((dep) => {
-        markdown += `- ${dep.description}`;
-        if (dep.source) {
-          markdown += ` (Source: ${dep.source})`;
-        }
-        markdown += `\n`;
-      });
-      markdown += `\n`;
-    }
-  }
-
-  // ============================================================================
-  // 12. ROLE DEFINITION / ACCESS MODEL
-  // ============================================================================
-  if (prd.roleDefinition) {
-    markdown += `## 12. Role Definition / Access Model\n\n`;
-    
-    if (prd.roleDefinition.roles && prd.roleDefinition.roles.length > 0) {
-      markdown += `### Role Definitions\n\n`;
-      prd.roleDefinition.roles.forEach((role) => {
-        markdown += `#### ${role.name}\n\n`;
-        markdown += `**ID:** ${role.id}\n\n`;
-        markdown += `**Description:** ${role.description}\n\n`;
-      });
-    }
-    
-    if (prd.roleDefinition.accessMatrix && prd.roleDefinition.accessMatrix.length > 0) {
-      markdown += `### Access Matrix\n\n`;
-      // Get all unique role names from access matrix
-      const roleColumns = new Set<string>();
-      prd.roleDefinition.accessMatrix.forEach((matrix) => {
-        Object.keys(matrix).forEach((key) => {
-          if (key !== "feature") {
-            roleColumns.add(key);
-          }
-        });
-      });
-      
-      const roleHeaders = Array.from(roleColumns);
-      markdown += `| Feature | ${roleHeaders.join(" | ")} |\n`;
-      markdown += `|---------|${roleHeaders.map(() => "---").join("|")}|\n`;
-      
-      prd.roleDefinition.accessMatrix.forEach((matrix) => {
-        const feature = (matrix as any).feature || "-";
-        const cells = roleHeaders.map((role) => (matrix as any)[role] || "-");
-        markdown += `| ${feature} | ${cells.join(" | ")} |\n`;
-      });
-      markdown += `\n`;
-    }
-  }
-
-  // ============================================================================
-  // 13. PRODUCT REQUIREMENTS / ACCEPTANCE CRITERIA
-  // ============================================================================
-  if (prd.productRequirements && prd.productRequirements.length > 0) {
-    markdown += `## 13. Product Requirements / Acceptance Criteria\n\n`;
-    
-    prd.productRequirements.forEach((req) => {
-      markdown += `### Module: ${req.module}\n\n`;
-      markdown += `**Objective:** ${req.objective}\n\n`;
-      
-      if (req.features && req.features.length > 0) {
-        req.features.forEach((feature) => {
-          markdown += `#### Feature: ${feature.name}\n\n`;
-          markdown += `**Description:** ${feature.description}\n\n`;
-          
-          if (feature.acceptanceCriteria && feature.acceptanceCriteria.length > 0) {
-            markdown += `**Acceptance Criteria:**\n\n`;
-            // Check if enhanced format
-            const firstAc = feature.acceptanceCriteria[0] as any;
-            if (firstAc.edgeCases || firstAc.errorScenarios || firstAc.validationRules) {
-              // Enhanced format - show all criteria with details
-              markdown += `| ID | Criterion | Testable |\n`;
-              markdown += `|----|-----------|----------|\n`;
-              feature.acceptanceCriteria.forEach((ac: any) => {
-                markdown += `| ${ac.id} | ${ac.description} | ${ac.testable ? "✓" : "-"} |\n`;
-                // Add enhanced details as sub-items
-                if (ac.edgeCases && ac.edgeCases.length > 0) {
-                  ac.edgeCases.forEach((edgeCase: string) => {
-                    markdown += `| ${ac.id}a | ${edgeCase} | ✓ |\n`;
-                  });
-                }
-                if (ac.errorScenarios && ac.errorScenarios.length > 0) {
-                  ac.errorScenarios.forEach((error: string) => {
-                    markdown += `| ${ac.id}b | ${error} | ✓ |\n`;
-                  });
-                }
-                if (ac.validationRules && ac.validationRules.length > 0) {
-                  ac.validationRules.forEach((rule: string) => {
-                    markdown += `| ${ac.id}c | ${rule} | ✓ |\n`;
-                  });
-                }
-              });
-            } else {
-              // Standard format
-              markdown += `| ID | Criterion | Testable |\n`;
-              markdown += `|----|-----------|----------|\n`;
-              feature.acceptanceCriteria.forEach((ac) => {
-                markdown += `| ${ac.id} | ${ac.description} | ${ac.testable ? "✓" : "-"} |\n`;
-              });
-            }
-            markdown += `\n`;
-          }
-        });
-      }
-    });
-  }
-
-  // ============================================================================
-  // 14. CRITICAL USER FLOWS
-  // ============================================================================
-  if (prd.criticalUserFlows && prd.criticalUserFlows.length > 0) {
-    markdown += `## 14. User Interaction and Design\n\n`;
-    markdown += `### Critical User Flows\n\n`;
-    
-    prd.criticalUserFlows.forEach((flow) => {
-      const enhancedFlow = flow as any;
-      markdown += `#### Flow: ${flow.name}\n\n`;
-      markdown += `**Role:** ${flow.role}\n\n`;
-      markdown += `**Goal:** ${flow.goal}\n\n`;
-      
-      if (flow.steps && flow.steps.length > 0) {
-        markdown += `**Primary Path:**\n\n`;
-        flow.steps.forEach((step: any) => {
-          markdown += `${step.stepNumber}. **${step.action}**`;
-          if (step.screen) {
-            markdown += ` → ${step.screen}`;
-          }
-          markdown += `\n`;
-          if (step.systemResponse) {
-            markdown += `   - System: ${step.systemResponse}\n`;
-          }
-          if (step.loadingState) {
-            markdown += `   - Loading State: ${step.loadingState}\n`;
-          }
-          if (step.successState) {
-            markdown += `   - Success State: ${step.successState}\n`;
-          }
-          if (step.errorState) {
-            markdown += `   - Error State: ${step.errorState}\n`;
-          }
-          if (step.painPoint) {
-            markdown += `   - Pain Point: ${step.painPoint}\n`;
-          }
-          markdown += `\n`;
-        });
-      }
-      
-      // Enhanced flow sections
-      if (enhancedFlow.alternativePaths && enhancedFlow.alternativePaths.length > 0) {
-        markdown += `**Alternative Paths:**\n\n`;
-        enhancedFlow.alternativePaths.forEach((altPath: any) => {
-          markdown += `- **${altPath.name}:**\n`;
-          if (altPath.steps && altPath.steps.length > 0) {
-            altPath.steps.forEach((step: any, idx: number) => {
-              markdown += `  ${idx + 1}. ${step.action}\n`;
-            });
-          }
-          markdown += `\n`;
-        });
-      }
-      
-      if (enhancedFlow.errorScenarios && enhancedFlow.errorScenarios.length > 0) {
-        markdown += `**Error Scenarios:**\n\n`;
-        enhancedFlow.errorScenarios.forEach((error: any) => {
-          markdown += `- **${error.scenario}:** ${error.handling}\n`;
-        });
-        markdown += `\n`;
-      }
-      
-      if (enhancedFlow.edgeCases && enhancedFlow.edgeCases.length > 0) {
-        markdown += `**Edge Cases:**\n\n`;
-        enhancedFlow.edgeCases.forEach((edgeCase: string) => {
-          markdown += `- ${edgeCase}\n`;
-        });
-        markdown += `\n`;
-      }
-    });
-  }
-
-  // ============================================================================
-  // 15. TECHNICAL REQUIREMENTS
-  // ============================================================================
-  if (prd.technicalRequirements && prd.technicalRequirements.length > 0) {
-    markdown += `## 15. Technical Requirements\n\n`;
-    
-    const categories = ["infrastructure", "architecture", "dataManagement", "integration"];
-    categories.forEach((category) => {
-      const reqs = prd.technicalRequirements!.filter(r => r.category === category);
-      if (reqs.length > 0) {
-        const categoryName = category.charAt(0).toUpperCase() + category.slice(1).replace(/([A-Z])/g, " $1");
-        markdown += `### ${categoryName}\n\n`;
-        reqs.forEach((req) => {
-          if (req.requirements && req.requirements.length > 0) {
-            req.requirements.forEach((r) => {
-              markdown += `- ${r}\n`;
-            });
-          }
-          if (req.details && Object.keys(req.details).length > 0) {
-            Object.entries(req.details).forEach(([key, value]) => {
-              markdown += `  - ${key}: ${value}\n`;
-            });
-          }
-        });
-        markdown += `\n`;
-      }
-    });
-  }
-
-  // ============================================================================
-  // 16. NON-FUNCTIONAL REQUIREMENTS
-  // ============================================================================
-  if (prd.nonFunctionalRequirements && prd.nonFunctionalRequirements.length > 0) {
-    markdown += `## 16. Non-Functional Requirements (NFRs)\n\n`;
-    
-    const categories = ["performance", "security", "usability", "reliability", "scalability"];
-    categories.forEach((category) => {
-      const reqs = prd.nonFunctionalRequirements!.filter(r => r.category === category);
-      if (reqs.length > 0) {
-        const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-        markdown += `### ${categoryName}\n\n`;
-        reqs.forEach((req) => {
-          if (req.requirements && req.requirements.length > 0) {
-            req.requirements.forEach((r) => {
-              markdown += `- ${r}\n`;
-            });
-          }
-          if (req.metrics && Object.keys(req.metrics).length > 0) {
-            markdown += `  **Metrics:**\n`;
-            Object.entries(req.metrics).forEach(([key, value]) => {
-              markdown += `  - ${key}: ${value}\n`;
-            });
-          }
-        });
-        markdown += `\n`;
-      }
-    });
-  }
-
-  // ============================================================================
-  // 17. RISK MANAGEMENT
-  // ============================================================================
-  if (prd.riskManagement && prd.riskManagement.risks && prd.riskManagement.risks.length > 0) {
-    markdown += `## 17. Risk Management\n\n`;
-    
-    const categories = ["operational", "technical", "security", "legal", "financial"];
-    categories.forEach((category) => {
-      const risks = prd.riskManagement!.risks!.filter(r => r.category === category);
-      if (risks.length > 0) {
-        const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-        markdown += `### ${categoryName} Risks\n\n`;
-        // Check if enhanced format
-        const firstRisk = risks[0] as any;
-        if (firstRisk.riskOwner || firstRisk.contingencyPlan) {
-          // Enhanced format
-          markdown += `| Risk | Probability | Impact | Risk Owner | Mitigation Strategy | Contingency Plan | Monitoring Indicators | Review Frequency |\n`;
-          markdown += `|------|-------------|--------|------------|---------------------|------------------|---------------------|-----------------|\n`;
-          risks.forEach((risk: any) => {
-            markdown += `| ${risk.description} | ${risk.probability} | ${risk.impact} | ${risk.riskOwner || "-"} | ${risk.mitigationStrategy || "-"} | ${risk.contingencyPlan || "-"} | ${risk.monitoringIndicators ? risk.monitoringIndicators.join(", ") : "-"} | ${risk.reviewFrequency || "-"} |\n`;
-          });
-        } else {
-          // Standard format
-          markdown += `| Risk | Probability | Impact | Mitigation Strategy |\n`;
-          markdown += `|------|-------------|--------|---------------------|\n`;
-          risks.forEach((risk) => {
-            markdown += `| ${risk.description} | ${risk.probability} | ${risk.impact} | ${risk.mitigationStrategy || "-"} |\n`;
-          });
-        }
-        markdown += `\n`;
-      }
-    });
-  }
-
-  // ============================================================================
-  // 18. OPEN QUESTIONS & DECISIONS
-  // ============================================================================
-  if (prd.openQuestions) {
-    markdown += `## 18. Open Questions & Decisions\n\n`;
-    
-    if (prd.openQuestions.questions && prd.openQuestions.questions.length > 0) {
-      markdown += `### Open Questions\n\n`;
-      const byCategory: Record<string, typeof prd.openQuestions.questions> = {};
-      prd.openQuestions.questions.forEach((q) => {
-        const cat = q.category || "general";
-        if (!byCategory[cat]) byCategory[cat] = [];
-        byCategory[cat].push(q);
-      });
-      
-      Object.entries(byCategory).forEach(([category, questions]) => {
-        markdown += `#### ${category.charAt(0).toUpperCase() + category.slice(1)} Questions\n\n`;
-        questions.forEach((q) => {
-          markdown += `- **[${q.priority || "medium"}]** ${q.question}`;
-          if (q.context) {
-            markdown += `\n  - Context: ${q.context}`;
-          }
-          markdown += `\n`;
-        });
-        markdown += `\n`;
-      });
-    }
-    
-    if (prd.openQuestions.decisions && prd.openQuestions.decisions.length > 0) {
-      markdown += `### Decisions\n\n`;
-      prd.openQuestions.decisions.forEach((decision) => {
-        markdown += `#### ${decision.decision}\n\n`;
-        if (decision.rationale) {
-          markdown += `**Rationale:** ${decision.rationale}\n\n`;
-        }
-        if (decision.date) {
-          markdown += `**Date:** ${decision.date}\n\n`;
-        }
-      });
-    }
-  }
-
-  // ============================================================================
-  // 19-26. ENHANCED SECTIONS (if present)
-  // ============================================================================
-  
-  // 19. Delivery Timeline & Cost
-  if (prd.deliveryTimeline) {
-    markdown += generateDeliveryTimelineSection(prd.deliveryTimeline);
   }
   
-  // 20. Launch Plan
-  if (prd.launchPlan) {
-    markdown += generateLaunchPlanSection(prd.launchPlan);
+  return parts.join("\n");
+}
+
+function renderPrimaryPersonas(prd: PrdJson): string {
+  const personas = prd.targetAudience;
+  if (!personas?.length) return "TBD";
+  
+  // Use first 1-3 personas as primary
+  const primary = personas.slice(0, Math.min(3, personas.length));
+  return primary.map((p, idx) => renderPersona(p, idx + 1)).join("\n\n");
+}
+
+function renderSecondaryPersonas(prd: PrdJson): string {
+  const personas = prd.targetAudience;
+  if (!personas || personas.length <= 3) return "None identified.";
+  
+  const secondary = personas.slice(3);
+  return secondary.map((p, idx) => renderPersona(p, idx + 1, true)).join("\n\n");
+}
+
+function renderPersona(p: any, num: number, isSecondary = false): string {
+  const prefix = isSecondary ? `**Secondary Persona ${num}**` : `**Primary Persona ${num}**`;
+  const parts: string[] = [prefix];
+  
+  if (p.name) parts.push(`**Name:** ${p.name}`);
+  if (p.role) parts.push(`**Role:** ${p.role}`);
+  if (p.segment) parts.push(`**Segment:** ${p.segment}`);
+  if (p.demographics) {
+    const demo = typeof p.demographics === "string" ? p.demographics : JSON.stringify(p.demographics);
+    parts.push(`**Demographics:** ${demo}`);
+  }
+  const goals = ensureArray(p.goals);
+  if (goals.length) {
+    parts.push(`**Goals:**`);
+    parts.push(...goals.map((g: string) => `- ${g}`));
+  }
+  const painPoints = ensureArray(p.painPoints);
+  if (painPoints.length) {
+    parts.push(`**Pain Points:**`);
+    parts.push(...painPoints.map((pp: string) => `- ${pp}`));
+  }
+  const jobsToBeDone = ensureArray(p.jobsToBeDone);
+  if (jobsToBeDone.length) {
+    parts.push(`**Jobs to be Done:**`);
+    parts.push(...jobsToBeDone.map((jtbd: string) => `- ${jtbd}`));
   }
   
-  // 21. Stakeholders & RACI
-  if (prd.stakeholdersAndRaci) {
-    markdown += generateStakeholdersRaciSection(prd.stakeholdersAndRaci);
+  return parts.join("\n");
+}
+
+function renderInternalStakeholders(prd: PrdJson): string {
+  const stakeholders = prd.stakeholdersAndRaci?.stakeholders;
+  if (!stakeholders?.length) {
+    // Try to infer from documentMetadata
+    const doc = prd.documentMetadata;
+    if (doc?.collaborators?.length) {
+      return doc.collaborators.map(c => `- **${c}:** Involved in product development and delivery`).join("\n");
+    }
+    return "TBD";
   }
   
-  // 22. Design Requirements
-  if (prd.designRequirements) {
-    markdown += generateDesignRequirementsSection(prd.designRequirements);
+  return stakeholders.map(sh => {
+    const parts: string[] = [`- **${sh.name}** (${sh.role})`];
+    if (sh.influence) parts.push(`  - Influence: ${sh.influence}`);
+    if (sh.interest) parts.push(`  - Interest: ${sh.interest}`);
+    if (sh.engagementLevel) parts.push(`  - Engagement: ${sh.engagementLevel}`);
+    return parts.join("\n");
+  }).join("\n\n");
+}
+
+function renderValueProposition(prd: PrdJson): string {
+  const so = prd.solutionOverview;
+  if (!so) return "TBD";
+  
+  const parts: string[] = [];
+  if (so.valueProposition) {
+    parts.push(so.valueProposition);
+  }
+  const differentiators = ensureArray(so.differentiators);
+  if (differentiators.length) {
+    parts.push(`\n**Key Differentiators:**`);
+    parts.push(...differentiators.map(d => `- ${d}`));
   }
   
-  // 23. Data Models (Enhanced)
-  if (prd.dataModel && Object.keys(prd.dataModel).length > 0) {
-    const enhancedDataModel = prd.dataModel as any;
-    if (enhancedDataModel.entities) {
-      markdown += generateEnhancedDataModelsSection(enhancedDataModel);
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderStrategicModel(prd: PrdJson): string {
+  const lc = prd.leanCanvas;
+  if (!lc) return "TBD";
+  
+  const parts: string[] = [];
+  const customerSegments = ensureArray(lc.customerSegments);
+  if (customerSegments.length) {
+    parts.push(`**Customer Segments:** ${customerSegments.join(", ")}`);
+  }
+  const channels = ensureArray(lc.channels);
+  if (channels.length) {
+    parts.push(`**Channels:** ${channels.join(", ")}`);
+  }
+  const keyMetrics = ensureArray(lc.keyMetrics);
+  if (keyMetrics.length) {
+    parts.push(`**Key Metrics:**`);
+    parts.push(...keyMetrics.map(m => `- ${m}`));
+  }
+  const revenueStreams = ensureArray(lc.revenueStreams);
+  if (revenueStreams.length) {
+    parts.push(`**Revenue Streams:** ${revenueStreams.join(", ")}`);
+  }
+  const costStructure = ensureArray(lc.costStructure);
+  if (costStructure.length) {
+    parts.push(`**Cost Structure:** ${costStructure.join(", ")}`);
+  }
+  
+  return parts.length ? parts.join("\n\n") : "TBD";
+}
+
+function renderProductGoals(prd: PrdJson): string {
+  const goals = prd.goalsAndSuccessCriteria?.primaryGoals;
+  if (!goals?.length) return "TBD";
+  
+  return goals.map(g => `- ${g}`).join("\n");
+}
+
+function renderSuccessMetrics(prd: PrdJson): string {
+  const metrics = prd.goalsAndSuccessCriteria?.successMetrics;
+  if (!metrics?.length) return "TBD";
+  
+  const lines: string[] = [];
+  lines.push("| Metric | Description | Target | Measurement Method |");
+  lines.push("|--------|-------------|--------|-------------------|");
+  metrics.forEach((m: any) => {
+    lines.push(
+      `| ${escapeTableCell(m.name)} | ${escapeTableCell(m.description)} | ${escapeTableCell(m.target || "TBD")} | ${escapeTableCell(m.measurementMethod || "TBD")} |`
+    );
+  });
+  return lines.join("\n");
+}
+
+function renderMvpInScope(prd: PrdJson): string {
+  const scope = prd.mvpScope;
+  if (!scope) return "TBD";
+  
+  const parts: string[] = [];
+  const inScope = ensureArray(scope.inScope);
+  if (inScope.length) {
+    parts.push(...inScope.map(item => `- ${item}`));
+  }
+  if (scope.features?.length) {
+    parts.push(...scope.features.map(f => `- **${f.name}**${f.description ? `: ${f.description}` : ""}`));
+  }
+  
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderMvpOutOfScope(prd: PrdJson): string {
+  const out = ensureArray(prd.mvpScope?.outOfScope);
+  if (!out.length) return "None explicitly excluded.";
+  
+  return out.map(item => `- ${item}`).join("\n");
+}
+
+function renderFunctionalRequirements(prd: PrdJson): string {
+  const reqs = prd.productRequirements;
+  if (!reqs?.length) return "TBD";
+  
+  const parts: string[] = [];
+  reqs.forEach((req) => {
+    parts.push(`### ${req.module}`);
+    if (req.purpose) {
+      parts.push(`**Description**\n${req.purpose}`);
     } else {
-      // Legacy format
-      markdown += `## 23. Data Models\n\n`;
-      Object.entries(prd.dataModel).forEach(([entityName, entity]) => {
-        markdown += `### ${entityName}\n\n`;
-        if (entity.fields && Object.keys(entity.fields).length > 0) {
-          markdown += `| Field | Type | Required |\n`;
-          markdown += `|-------|------|----------|\n`;
-          Object.entries(entity.fields).forEach(([fieldName, field]: [string, any]) => {
-            const fieldType = (field as any).type || "string";
-            const fieldRequired = (field as any).required ? "✓" : "-";
-            markdown += `| ${fieldName} | ${fieldType} | ${fieldRequired} |\n`;
+      parts.push(`**Description**\n${req.objective}`);
+    }
+    
+    if (req.features?.length) {
+      parts.push(`**Acceptance Criteria**`);
+      req.features.forEach(f => {
+        if (f.acceptanceCriteria?.length) {
+          f.acceptanceCriteria.forEach(ac => {
+            parts.push(`- ${ac.description}`);
           });
-          markdown += `\n`;
         }
       });
     }
-  }
-  
-  // 24. Testing Strategy
-  if (prd.testingStrategy) {
-    markdown += generateTestingStrategySection(prd.testingStrategy);
-  }
-  
-  // 25. Deployment Strategy
-  if (prd.deploymentStrategy) {
-    markdown += generateDeploymentStrategySection(prd.deploymentStrategy);
-  }
-  
-  // 26. Analytics & Monitoring
-  if (prd.analyticsAndMonitoring) {
-    markdown += generateAnalyticsMonitoringSection(prd.analyticsAndMonitoring);
-  }
-
-  // ============================================================================
-  // 27. SCREENS & USER INTERFACE
-  // ============================================================================
-  if (prd.screens && prd.screens.length > 0) {
-    markdown += `## 27. Screens & User Interface\n\n`;
-    markdown += `The application consists of ${prd.screens.length} screens:\n\n`;
     
-    markdown += `| Screen Name | Purpose | Path |\n`;
-    markdown += `|-------------|---------|------|\n`;
-    prd.screens.forEach((screen) => {
-      // Generate purpose if missing
-      const purpose = screen.purpose || generateScreenPurpose(screen.name);
-      markdown += `| ${screen.name} | ${purpose} | \`${screen.path || "-"}\` |\n`;
-    });
-    markdown += `\n`;
-  }
-
-  // ============================================================================
-  // 28. NAVIGATION STRUCTURE
-  // ============================================================================
-  if (prd.navigation && prd.navigation.length > 0) {
-    markdown += `## 28. Navigation Structure\n\n`;
-    markdown += `The application has ${prd.navigation.length} navigation routes:\n\n`;
-    
-    markdown += `| From Screen | To Screen | Route Path | Event/Label | Access Control |\n`;
-    markdown += `|-------------|-----------|------------|-------------|----------------|\n`;
-    prd.navigation.forEach((nav) => {
-      const fromScreen = nav.fromScreenId || "-";
-      const toScreen = nav.toScreenId || "-";
-      const routePath = nav.path || generateRoutePath(toScreen);
-      const event = nav.event || nav.label || "-";
-      markdown += `| ${fromScreen} | ${toScreen} | \`${routePath}\` | ${event} | - |\n`;
-    });
-    markdown += `\n`;
-  }
-
-  // ============================================================================
-  // 29. API ENDPOINTS
-  // ============================================================================
-  if (prd.api && prd.api.length > 0) {
-    markdown += `## 29. API Endpoints\n\n`;
-    
-    // Check if we have detailed API info
-    const firstEndpoint = prd.api[0] as any;
-    if (firstEndpoint.description || firstEndpoint.authRequired !== undefined) {
-      markdown += `### REST API Endpoints\n\n`;
-      markdown += `| Method | Endpoint | Name | Description | Authentication | Request Body | Response |\n`;
-      markdown += `|--------|----------|------|-------------|---------------|--------------|----------|\n`;
-      prd.api.forEach((endpoint: any) => {
-        markdown += `| ${endpoint.method || "-"} | \`${endpoint.endpoint}\` | ${endpoint.name || "-"} | ${endpoint.description || "-"} | ${endpoint.authRequired ? "Bearer Token" : "None"} | ${endpoint.payloadFields ? JSON.stringify(endpoint.payloadFields) : "-"} | ${endpoint.responseFields ? JSON.stringify(endpoint.responseFields) : "-"} |\n`;
-      });
-    } else {
-      markdown += `| Method | Endpoint | Name | Handler |\n`;
-      markdown += `|--------|----------|------|----------|\n`;
-      prd.api.forEach((endpoint) => {
-        markdown += `| ${endpoint.method || "-"} | \`${endpoint.endpoint}\` | ${endpoint.name || "-"} | \`${endpoint.handler || "-"}\` |\n`;
+    if ((req as any).constraints?.length) {
+      parts.push(`**Edge Cases / Exceptions**`);
+      (req as any).constraints.forEach((c: string) => {
+        parts.push(`- ${c}`);
       });
     }
-    markdown += `\n`;
-  }
+    
+    parts.push(""); // Empty line between modules
+  });
+  
+  return parts.join("\n");
+}
 
-  // ============================================================================
-  // 30. EVENTS & USER INTERACTIONS
-  // ============================================================================
-  if (prd.events && prd.events.length > 0) {
-    markdown += `## 30. User Interactions & Events\n\n`;
-    markdown += `The application handles ${prd.events.length} user interaction events. Below is a comprehensive list of all events with descriptions, triggers, and outcomes.\n\n`;
-    
-    // Group events by type
-    const eventsByType: Record<string, typeof prd.events> = {};
-    prd.events.forEach((event) => {
-      const type = event.type || "other";
-      if (!eventsByType[type]) {
-        eventsByType[type] = [];
-      }
-      eventsByType[type].push(event);
-    });
-    
-    Object.entries(eventsByType).forEach(([type, events]) => {
-      const typeName = type.charAt(0).toUpperCase() + type.slice(1).replace(/-/g, " ");
-      markdown += `### ${typeName} Events\n\n`;
-      markdown += `| Event Type | Handler/Function | Description | Trigger | Outcome |\n`;
-      markdown += `|------------|------------------|-------------|---------|----------|\n`;
-      events.forEach((event) => {
-        const eventType = event.type || "onClick";
-        const handler = event.handler || event.name || "-";
-        const description = generateEventDescription(event);
-        const trigger = event.trigger || "-";
-        const outcome = event.outputs ? event.outputs.join(", ") : "-";
-        markdown += `| ${eventType} | ${handler} | ${description} | ${trigger} | ${outcome} |\n`;
+function renderKeyUserFlows(prd: PrdJson): string {
+  const flows = prd.criticalUserFlows as any[] | undefined;
+  if (!flows?.length) return "TBD";
+  
+  const parts: string[] = [];
+  flows.forEach((flow) => {
+    parts.push(`**${flow.name}** (Role: ${flow.role})`);
+    parts.push(`*Goal:* ${flow.goal}`);
+    if (flow.steps?.length) {
+      parts.push(`*Steps:*`);
+      flow.steps.slice(0, 15).forEach((s: any) => {
+        const screen = s.screen ? ` → ${s.screen}` : "";
+        parts.push(`  ${s.stepNumber}. ${s.action}${screen}`);
       });
-      markdown += `\n`;
-    });
-  }
+    }
+    parts.push(""); // Empty line between flows
+  });
+  
+  return parts.join("\n");
+}
 
-  // ============================================================================
-  // 31. TECHNICAL STACK
-  // ============================================================================
-  if (prd.aiMetadata?.stackDetected && prd.aiMetadata.stackDetected.length > 0) {
-    markdown += `## 31. Technical Stack\n\n`;
-    markdown += `### Frontend\n\n`;
-    markdown += `- **Framework:** ${prd.aiMetadata.stackDetected.find(s => s.toLowerCase().includes('next') || s.toLowerCase().includes('react')) || "Not specified"}\n`;
-    markdown += `- **Language:** TypeScript\n`;
-    markdown += `- **UI Library:** React\n\n`;
-    markdown += `### Backend\n\n`;
-    markdown += `- **Runtime:** Node.js\n`;
-    markdown += `- **Database:** PostgreSQL (via Supabase)\n\n`;
-    markdown += `### Infrastructure\n\n`;
-    markdown += `- **Hosting:** Cloud provider (AWS/Azure/GCP)\n`;
-    markdown += `- **CDN:** Cloudflare/AWS CloudFront\n\n`;
+function renderNavigationArchitecture(prd: PrdJson): string {
+  const parts: string[] = [];
+  
+  // List screens
+  if (prd.screens?.length) {
+    parts.push(`**Screens/Views:**`);
+    parts.push(...prd.screens.slice(0, 20).map(s => `- ${s.name}${s.path ? ` (${s.path})` : ""}`));
+    parts.push("");
   }
   
-  // ============================================================================
-  // 32. GLOSSARY
-  // ============================================================================
-  if (prd.glossary && prd.glossary.terms && prd.glossary.terms.length > 0) {
-    markdown += `## 32. Glossary\n\n`;
-    markdown += `### Terms and Definitions\n\n`;
-    prd.glossary.terms.forEach((term) => {
-      markdown += `**${term.term}:** ${term.definition}\n\n`;
+  // Navigation structure
+  if (prd.navigation?.length) {
+    parts.push(`**Navigation Structure:**`);
+    prd.navigation.slice(0, 15).forEach((nav: any) => {
+      if (nav.path) {
+        parts.push(`- ${nav.label || nav.path}: ${nav.path}`);
+      }
+    });
+    parts.push("");
+  }
+  
+  // Role-based access
+  if (prd.roleDefinition?.accessMatrix?.length) {
+    parts.push(`**Role-Based Access:**`);
+    const roleCols = new Set<string>();
+    prd.roleDefinition.accessMatrix.forEach((row: any) => {
+      Object.keys(row).forEach(k => { if (k !== "feature") roleCols.add(k); });
+    });
+    const roles = Array.from(roleCols);
+    if (roles.length > 0) {
+      parts.push(`Roles: ${roles.join(", ")}`);
+    }
+  }
+  
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderDataDomainModel(prd: PrdJson): string {
+  const dm: any = prd.dataModel;
+  if (!dm) return "TBD";
+  
+  const entities = dm.entities ? dm.entities : dm;
+  const parts: string[] = [];
+  
+  Object.entries(entities || {}).forEach(([entityName, entity]: [string, any]) => {
+    parts.push(`**${entityName}**`);
+    if (entity.fields) {
+      const fieldNames = Object.keys(entity.fields).slice(0, 10);
+      parts.push(`Fields: ${fieldNames.join(", ")}${Object.keys(entity.fields).length > 10 ? "..." : ""}`);
+    }
+    if (entity.relationships?.length) {
+      parts.push(`Relationships: ${entity.relationships.map((r: any) => `${r.type} → ${r.target}`).join(", ")}`);
+    }
+    parts.push("");
+  });
+  
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderTechnicalConstraints(prd: PrdJson): string {
+  const reqs = prd.technicalRequirements;
+  if (!reqs?.length) return "TBD";
+  
+  const parts: string[] = [];
+  const byCat: Record<string, any[]> = {};
+  reqs.forEach((r) => {
+    if (!byCat[r.category]) byCat[r.category] = [];
+    byCat[r.category].push(r);
+  });
+  
+  Object.entries(byCat).forEach(([cat, items]) => {
+    parts.push(`**${cat.charAt(0).toUpperCase() + cat.slice(1)}:**`);
+    items.forEach((i: any) => {
+      i.requirements?.forEach((x: string) => parts.push(`- ${x}`));
+    });
+    parts.push("");
+  });
+  
+  return parts.join("\n").trim() || "TBD";
+}
+
+function renderNonFunctionalRequirementsGold(prd: PrdJson): string {
+  const reqs = prd.nonFunctionalRequirements;
+  if (!reqs?.length) return "TBD";
+  
+  const parts: string[] = [];
+  const byCat: Record<string, any[]> = {};
+  reqs.forEach((r) => {
+    if (!byCat[r.category]) byCat[r.category] = [];
+    byCat[r.category].push(r);
+  });
+  
+  Object.entries(byCat).forEach(([cat, items]) => {
+    parts.push(`### ${cat.charAt(0).toUpperCase() + cat.slice(1)}`);
+    items.forEach((i: any) => {
+      if (i.requirements?.length) {
+        i.requirements.forEach((req: string) => {
+          parts.push(`- **Requirement:** ${req}`);
+        });
+      }
+      if (i.metrics && Object.keys(i.metrics).length) {
+        Object.entries(i.metrics).forEach(([k, v]) => {
+          parts.push(`- **Metric:** ${k} = ${v}`);
+        });
+      }
+    });
+    parts.push("");
+  });
+  
+  return parts.join("\n").trim() || "TBD";
+}
+
+function renderDependenciesGold(prd: PrdJson): string {
+  const d: any = prd.dependencies;
+  if (!d) return "TBD";
+  
+  const parts: string[] = [];
+  if (d.service?.length) {
+    parts.push(`- **Technical:**`);
+    d.service.forEach((dep: any) => {
+      parts.push(`  - ${dep.name}: ${dep.description}`);
     });
   }
+  if (d.operational?.length) {
+    parts.push(`- **Operational:**`);
+    d.operational.forEach((dep: any) => {
+      parts.push(`  - ${dep.description}`);
+    });
+  }
+  if (d.content?.length) {
+    parts.push(`- **Legal:**`);
+    d.content.forEach((dep: any) => {
+      parts.push(`  - ${dep.description}`);
+    });
+  }
+  
+  return parts.length ? parts.join("\n") : "TBD";
+}
 
-  // ============================================================================
-  // APPENDIX: AI METADATA
-  // ============================================================================
+function renderAssumptionsGold(prd: PrdJson): string {
+  const a = prd.assumptions;
+  if (!a) return "TBD";
+  
+  const parts: string[] = [];
+  const technical = ensureArray(a.technical);
+  if (technical.length) {
+    parts.push(...technical.map(x => `- ${x}`));
+  }
+  const operational = ensureArray(a.operational);
+  if (operational.length) {
+    parts.push(...operational.map(x => `- ${x}`));
+  }
+  const financial = ensureArray(a.financial);
+  if (financial.length) {
+    parts.push(...financial.map(x => `- ${x}`));
+  }
+  const legal = ensureArray(a.legal);
+  if (legal.length) {
+    parts.push(...legal.map(x => `- ${x}`));
+  }
+  
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderRiskManagementGold(prd: PrdJson): string {
+  const risks = prd.riskManagement?.risks;
+  if (!risks?.length) return "TBD";
+  
+  const lines: string[] = [];
+  lines.push("| Risk Description | Likelihood | Impact | Mitigation Strategy |");
+  lines.push("|------------------|------------|--------|---------------------|");
+  risks.forEach((r: any) => {
+    lines.push(
+      `| ${escapeTableCell(r.description)} | ${escapeTableCell(r.probability)} | ${escapeTableCell(r.impact)} | ${escapeTableCell(r.mitigationStrategy || "TBD")} |`
+    );
+  });
+  return lines.join("\n");
+}
+
+function renderDeliveryPlan(prd: PrdJson): string {
+  if (!prd.deliveryTimeline) return "TBD";
+  return generateDeliveryTimelineSection(prd.deliveryTimeline)
+    .replace(/^##\s+\d+\.?\s+Delivery Timeline.*\n\n?/m, "")
+    .trim() || "TBD";
+}
+
+function renderLaunchPlanGold(prd: PrdJson): string {
+  if (!prd.launchPlan) return "TBD";
+  return generateLaunchPlanSection(prd.launchPlan)
+    .replace(/^##\s+\d+\.?\s+Launch Plan\n\n?/m, "")
+    .trim() || "TBD";
+}
+
+function renderOpenQuestionsGold(prd: PrdJson, questions: QuestionsForClient): string {
+  const oq = prd.openQuestions;
+  const parts: string[] = [];
+  
+  // Add questions from openQuestions
+  if (oq?.questions?.length) {
+    const lines: string[] = [];
+    lines.push("| Question / Decision | Context / Impact | Owner | Status | Deadline |");
+    lines.push("|--------------------|------------------|-------|--------|----------|");
+    oq.questions.forEach((q) => {
+      lines.push(
+        `| ${escapeTableCell(q.question)} | ${escapeTableCell(q.context || "TBD")} | TBD | TBD | TBD |`
+      );
+    });
+    parts.push(lines.join("\n"));
+  }
+  
+  // Add questions from questionsForClient if available
+  if (questions.questions?.length) {
+    if (parts.length) parts.push("");
+    parts.push("**Additional Questions for Client:**");
+    questions.questions.forEach((q) => {
+      parts.push(`- [${q.priority}] ${q.question}${q.reason ? ` — ${q.reason}` : ""}`);
+    });
+  }
+  
+  return parts.length ? parts.join("\n\n") : "None identified.";
+}
+
+function renderAppendixGold(prd: PrdJson): string {
+  const parts: string[] = [];
+  
   if (prd.aiMetadata) {
-    markdown += `---\n\n## Appendix: AI Extraction Metadata\n\n`;
-    markdown += `**Extracted At:** ${new Date(prd.aiMetadata.extractedAt || Date.now()).toLocaleString()}\n\n`;
+    parts.push(`**Extraction metadata**`);
+    parts.push(`- Extracted At: ${new Date(prd.aiMetadata.extractedAt || Date.now()).toLocaleString()}`);
     
     if (prd.aiMetadata.extractionNotes) {
-      const notes = Array.isArray(prd.aiMetadata.extractionNotes) 
-        ? prd.aiMetadata.extractionNotes 
+      const notes = Array.isArray(prd.aiMetadata.extractionNotes)
+        ? prd.aiMetadata.extractionNotes
         : [prd.aiMetadata.extractionNotes];
-      markdown += `**Extraction Notes:** ${notes.join("; ")}\n\n`;
+      parts.push(`- Extraction Notes: ${notes.join("; ")}`);
+    }
+    
+    if (prd.aiMetadata.stackDetected?.length) {
+      parts.push(`- Stack Detected: ${prd.aiMetadata.stackDetected.join(", ")}`);
+    }
+    
+    if (prd.aiMetadata.dataQualityAssessment) {
+      parts.push(`**Confidence levels**`);
+      const dqa = prd.aiMetadata.dataQualityAssessment;
+      if (dqa.highConfidence?.length) {
+        parts.push(`- High Confidence: ${dqa.highConfidence.join(", ")}`);
+      }
+      if (dqa.mediumConfidence?.length) {
+        parts.push(`- Medium Confidence: ${dqa.mediumConfidence.join(", ")}`);
+      }
+      if (dqa.lowConfidence?.length) {
+        parts.push(`- Low Confidence: ${dqa.lowConfidence.join(", ")}`);
+      }
+    }
+    
+    if (prd.aiMetadata.missingInformation) {
+      parts.push(`**Known gaps**`);
+      const mi = prd.aiMetadata.missingInformation;
+      if (mi.fromTier3?.length) {
+        parts.push(`- Missing from Tier 3: ${mi.fromTier3.join(", ")}`);
+      }
+      if (mi.potentialSources?.length) {
+        parts.push(`- Potential Sources: ${mi.potentialSources.join(", ")}`);
+      }
     }
   }
+  
+  // Source mapping
+  if (prd.screens?.length || prd.api?.length) {
+    parts.push(`**Source mapping**`);
+    if (prd.screens?.length) {
+      parts.push(`- Screens detected: ${prd.screens.length}`);
+    }
+    if (prd.api?.length) {
+      parts.push(`- API endpoints detected: ${prd.api.length}`);
+    }
+  }
+  
+  return parts.length ? parts.join("\n") : "TBD";
+}
 
-  // ============================================================================
-  // CHANGE LOG
-  // ============================================================================
-  markdown += `---\n\n## 33. Change Log\n\n`;
-  markdown += `| Version | Date | Changes | Author |\n`;
-  markdown += `|---------|------|---------|--------|\n`;
-  markdown += `| ${prd.project?.version || "1.0.0"} | ${new Date(prd.project?.createdAt || Date.now()).toLocaleDateString()} | Initial PRD | Product Team |\n`;
+// ============================================================================
+// LEGACY TEMPLATE RENDER FUNCTIONS (for backwards compatibility)
+// ============================================================================
 
-  return markdown;
+function renderArcaStyleToc(): string {
+  // Keep this list stable to match the PRD template structure.
+  const items = [
+    "Summary",
+    "Problem Statement & Outcomes",
+    "Goals & Success Criteria",
+    "MVP Scope",
+    "Target Audience / Personas",
+    "Assumptions",
+    "Dependencies",
+    "Role Definition / Access Model",
+    "Product Requirements / Acceptance Criteria",
+    "Dependency mapping",
+    "User Interaction and Design",
+    "Technical Requirements",
+    "Non-Functional Requirements",
+    "Risk Management",
+    "Delivery timeline & cost",
+    "Launch Plan",
+    "Stakeholders, Roles & RACI",
+    "Open Questions & Decisions",
+    "Change log",
+    "Appendix",
+  ];
+
+  const toAnchor = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9\s/-]/g, "")
+      .replace(/\s+/g, "-");
+
+  return [
+    "### Table of Content",
+    "",
+    ...items.map((i) => `- [${i}](#${toAnchor(i)})`),
+    "",
+  ].join("\n");
+}
+
+function renderSummary(prd: PrdJson): string {
+  const pieces: string[] = [];
+  const overview = prd.executiveSummary?.overview || prd.solutionOverview?.valueProposition;
+  if (overview) pieces.push(overview);
+  const highlights = prd.executiveSummary?.solutionHighlights;
+  if (highlights) pieces.push(highlights);
+  return pieces.length ? pieces.join("\n\n") : "TBD";
+}
+
+function renderProblemStatementAndOutcomes(prd: PrdJson): string {
+  const parts: string[] = [];
+  const primary = prd.problemDefinition?.primaryProblem;
+  if (primary) parts.push(`**Problem:** ${primary}`);
+  const marketGap = (prd.problemDefinition as any)?.marketGap;
+  if (marketGap) parts.push(`\n**Market Gap:** ${marketGap}`);
+  const context = prd.problemDefinition?.context;
+  if (context) parts.push(`\n**Context:** ${context}`);
+  const impact = prd.problemDefinition?.businessImpact;
+  if (impact) parts.push(`\n**Business impact:** ${impact}`);
+  const pains = prd.problemDefinition?.userPainPoints;
+  if (pains?.length) {
+    parts.push("\n**User pain points:**");
+    parts.push(...pains.map((p) => `- ${p}`));
+  }
+  const outcomes = (prd.problemDefinition as any)?.outcomes;
+  if (outcomes) {
+    parts.push("\n**Outcomes:**");
+    // Handle both array and string cases (AI sometimes returns string instead of array)
+    if (Array.isArray(outcomes)) {
+      parts.push(...outcomes.map((o) => `- ${o}`));
+    } else {
+      // If it's a string, treat each line or sentence as a separate outcome
+      const outcomesList = typeof outcomes === 'string' 
+        ? outcomes.split(/[.;]\s*/).filter(s => s.trim().length > 0)
+        : [String(outcomes)];
+      parts.push(...outcomesList.map((o) => `- ${o.trim()}`));
+    }
+  }
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderGoalsAndSuccessCriteria(prd: PrdJson): string {
+  const parts: string[] = [];
+  const goals = prd.goalsAndSuccessCriteria?.primaryGoals;
+  if (goals?.length) {
+    parts.push("**Primary Goals:**");
+    parts.push(...goals.map((g) => `- ${g}`));
+    parts.push("");
+  }
+  const metrics = prd.goalsAndSuccessCriteria?.successMetrics;
+  if (metrics?.length) {
+    parts.push("| **Metric** | **Description** | **Target** | **Measurement** |");
+    parts.push("| --- | --- | --- | --- |");
+    metrics.forEach((m: any) => {
+      parts.push(
+        `| ${escapeTableCell(m.name)} | ${escapeTableCell(m.description)} | ${escapeTableCell(m.target || "TBD")} | ${escapeTableCell(m.measurementMethod || "TBD")} |`
+      );
+    });
+    parts.push("");
+  }
+  const kpis = prd.goalsAndSuccessCriteria?.kpis;
+  if (kpis?.length) {
+    parts.push("**KPIs:**");
+    parts.push(...kpis.map((k) => `- ${k}`));
+  }
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderMvpScope(prd: PrdJson): string {
+  const parts: string[] = [];
+  const inScope = (prd.mvpScope as any)?.inScope as string[] | undefined;
+  if (inScope?.length) {
+    parts.push("In scope:");
+    parts.push("");
+    parts.push(...inScope.map((x) => `- ${x}`));
+    parts.push("");
+  }
+  const features = prd.mvpScope?.features;
+  if (features?.length) {
+    if (!inScope?.length) parts.push("In scope:");
+    parts.push("");
+    parts.push(...features.map((f) => `- ${f.name}${f.description ? ` — ${f.description}` : ""}`));
+    parts.push("");
+  }
+  const out = prd.mvpScope?.outOfScope;
+  if (out?.length) {
+    parts.push("Out of Scope:");
+    parts.push("");
+    parts.push(...out.map((o) => `- ${o}`));
+  }
+
+  const roleStages = (prd.mvpScope as any)?.roleStages as any[] | undefined;
+  if (roleStages?.length) {
+    parts.push("");
+    parts.push("Role/Stage breakdown:");
+    parts.push("");
+    roleStages.forEach((rs) => {
+      parts.push(`- **${rs.role}**`);
+      rs.stages?.forEach((stage: any) => {
+        parts.push(`  - ${stage.name}`);
+        stage.items?.forEach((it: string) => parts.push(`    - ${it}`));
+      });
+    });
+  }
+  return parts.length ? parts.join("\n") : "TBD";
+}
+
+function renderTargetAudience(prd: PrdJson): string {
+  const personas = prd.targetAudience;
+  if (!personas?.length) return "TBD";
+
+  const parts: string[] = [];
+  personas.forEach((p, idx) => {
+    parts.push(`Persona ${idx + 1} — ${p.name}`);
+    const bullets: string[] = [];
+    if (p.role) bullets.push(`Role: ${p.role}`);
+    if (p.segment) bullets.push(`Segment: ${p.segment}`);
+    if (p.geography) bullets.push(`Geography: ${p.geography}`);
+    if (p.techComfort) bullets.push(`Tech comfort: ${p.techComfort}`);
+    if (p.demographics) bullets.push(`Demographics: ${typeof p.demographics === "string" ? p.demographics : JSON.stringify(p.demographics)}`);
+    if (p.goals?.length) bullets.push(`Goals: ${p.goals.join("; ")}`);
+    if (p.painPoints?.length) bullets.push(`Pain points: ${p.painPoints.join("; ")}`);
+    if (p.jobsToBeDone?.length) bullets.push(`Jobs to be done: ${p.jobsToBeDone.join("; ")}`);
+
+    if (bullets.length) {
+      parts.push("");
+      parts.push(...bullets.map((b) => `- ${b}`));
+    }
+    parts.push("");
+  });
+
+  return parts.join("\n").trim() || "TBD";
+}
+
+function renderAssumptions(prd: PrdJson): string {
+  const a = prd.assumptions;
+  if (!a) return "TBD";
+  const parts: string[] = [];
+  if (a.technical?.length) {
+    parts.push("### Technical Assumptions");
+    parts.push(...a.technical.map((x) => `- ${x}`), "");
+  }
+  if (a.operational?.length) {
+    parts.push("### Operational Assumptions");
+    parts.push(...a.operational.map((x) => `- ${x}`), "");
+  }
+  if (a.financial?.length) {
+    parts.push("### Financial Assumptions");
+    parts.push(...a.financial.map((x) => `- ${x}`), "");
+  }
+  if (a.legal?.length) {
+    parts.push("### Legal/Compliance Assumptions");
+    parts.push(...a.legal.map((x) => `- ${x}`), "");
+  }
+  return parts.length ? parts.join("\n").trim() : "TBD";
+}
+
+function renderDependencies(prd: PrdJson): string {
+  const d: any = prd.dependencies;
+  if (!d) return "TBD";
+  const parts: string[] = [];
+  if (d.service?.length) {
+    parts.push("**Service Dependencies:**");
+    d.service.forEach((dep: any) => {
+      parts.push(`- ${dep.name}: ${dep.description}${dep.impact ? ` (Impact: ${dep.impact})` : ""}`);
+    });
+    parts.push("");
+  }
+  if (d.operational?.length) {
+    parts.push("**Operational Dependencies:**");
+    d.operational.forEach((dep: any) => {
+      parts.push(`- ${dep.description}${dep.requirement ? ` (Requirement: ${dep.requirement})` : ""}`);
+    });
+    parts.push("");
+  }
+  if (d.content?.length) {
+    parts.push("**Content & Legal Dependencies:**");
+    d.content.forEach((dep: any) => {
+      parts.push(`- ${dep.description}${dep.source ? ` (Source: ${dep.source})` : ""}`);
+    });
+  }
+  return parts.length ? parts.join("\n").trim() : "TBD";
+}
+
+function renderRoleDefinition(prd: PrdJson): string {
+  const r = prd.roleDefinition;
+  if (!r) return "TBD";
+  const parts: string[] = [];
+  if (r.roles?.length) {
+    parts.push("**Definitions**");
+    parts.push("");
+    r.roles.forEach((role) => {
+      parts.push(`- ${role.name}: ${role.description} (id: ${role.id})`);
+    });
+    parts.push("");
+  }
+  if (r.accessMatrix?.length) {
+    parts.push("**Access Model**");
+    parts.push("");
+    const roleColumns = new Set<string>();
+    r.accessMatrix.forEach((row: any) => {
+      Object.keys(row).forEach((k) => {
+        if (k !== "feature") roleColumns.add(k);
+      });
+    });
+    const headers = Array.from(roleColumns);
+    parts.push(`| Feature | ${headers.join(" | ")} |`);
+    parts.push(`| --- | ${headers.map(() => "---").join(" | ")} |`);
+    r.accessMatrix.forEach((row: any) => {
+      const cells = headers.map((h) => escapeTableCell(row[h] || "-"));
+      parts.push(`| ${escapeTableCell(row.feature || "-")} | ${cells.join(" | ")} |`);
+    });
+  }
+  return parts.length ? parts.join("\n").trim() : "TBD";
+}
+
+function renderProductRequirementsTable(prd: PrdJson): string {
+  const reqs = prd.productRequirements;
+  if (!reqs?.length) return "TBD";
+
+  const lines: string[] = [];
+  lines.push("| **Feature Area** | **Summary** |");
+  lines.push("| --- | --- |");
+  reqs.forEach((req) => {
+    const featureLines: string[] = [];
+    if (req.features?.length) {
+      req.features.slice(0, 8).forEach((f) => {
+        featureLines.push(`• ${f.name}${f.description ? `: ${f.description}` : ""}`);
+      });
+      if (req.features.length > 8) featureLines.push(`• ...and ${req.features.length - 8} more`);
+    }
+    const purpose = (req as any).purpose as string | undefined;
+    const keyCaps = (req as any).keyCapabilities as string[] | undefined;
+    const systemResponsibilities = (req as any).systemResponsibilities as string[] | undefined;
+    const constraints = (req as any).constraints as string[] | undefined;
+
+    const summary = [
+      purpose ? `**Purpose:** ${purpose}` : "",
+      `**Objective:** ${req.objective}`,
+      keyCaps?.length
+        ? `**Key Capabilities:**<br>${keyCaps.map((c) => `• ${c}`).join("<br>")}`
+        : featureLines.length
+          ? `**Key Capabilities:**<br>${featureLines.join("<br>")}`
+          : "",
+      systemResponsibilities?.length
+        ? `**System Responsibilities:**<br>${systemResponsibilities.map((c) => `• ${c}`).join("<br>")}`
+        : "",
+      constraints?.length ? `**Constraints:**<br>${constraints.map((c) => `• ${c}`).join("<br>")}` : "",
+    ]
+      .filter(Boolean)
+      .join("<br><br>");
+
+    lines.push(`| **${escapeTableCell(req.module)}** | ${escapeTableCell(summary)} |`);
+  });
+
+  lines.push("");
+  lines.push("_Note: detailed acceptance criteria are captured in the structured JSON and can be expanded per module/feature._");
+  return lines.join("\n");
+}
+
+function renderDependencyMapping(prd: PrdJson): string {
+  const mapping = (prd as any).dependencyMapping as Array<{ featureArea: string; dependsOn: string[]; description?: string }> | undefined;
+  if (!mapping?.length) return "TBD";
+
+  const lines: string[] = [];
+  lines.push("| Feature Area | Depends On | Description |");
+  lines.push("| --- | --- | --- |");
+  mapping.forEach((m) => {
+    lines.push(
+      `| ${escapeTableCell(m.featureArea)} | ${escapeTableCell((m.dependsOn || []).join(", ") || "TBD")} | ${escapeTableCell(m.description || "TBD")} |`
+    );
+  });
+  return lines.join("\n");
+}
+
+function renderUserInteractionAndDesign(prd: PrdJson): string {
+  const flows = prd.criticalUserFlows as any[] | undefined;
+  if (!flows?.length) return "TBD";
+  const parts: string[] = [];
+  flows.forEach((flow) => {
+    parts.push(`- **${flow.name}** (Role: ${flow.role}) — ${flow.goal}`);
+    if (flow.steps?.length) {
+      flow.steps.slice(0, 15).forEach((s: any) => {
+        const screen = s.screen ? ` → ${s.screen}` : "";
+        parts.push(`  - ${s.stepNumber}. ${s.action}${screen}`);
+      });
+    }
+  });
+  return parts.join("\n");
+}
+
+function renderTechnicalRequirements(prd: PrdJson): string {
+  const reqs = prd.technicalRequirements;
+  if (!reqs?.length) return "TBD";
+  const parts: string[] = [];
+  const byCat: Record<string, any[]> = {};
+  reqs.forEach((r) => {
+    if (!byCat[r.category]) byCat[r.category] = [];
+    byCat[r.category].push(r);
+  });
+  Object.entries(byCat).forEach(([cat, items]) => {
+    parts.push(`- **${cat}**`);
+    items.forEach((i: any) => {
+      i.requirements?.forEach((x: string) => parts.push(`  - ${x}`));
+    });
+  });
+  return parts.join("\n");
+}
+
+function renderNonFunctionalRequirements(prd: PrdJson): string {
+  const reqs = prd.nonFunctionalRequirements;
+  if (!reqs?.length) return "TBD";
+  const parts: string[] = [];
+  const byCat: Record<string, any[]> = {};
+  reqs.forEach((r) => {
+    if (!byCat[r.category]) byCat[r.category] = [];
+    byCat[r.category].push(r);
+  });
+  Object.entries(byCat).forEach(([cat, items]) => {
+    parts.push(`- **${cat}**`);
+    items.forEach((i: any) => {
+      i.requirements?.forEach((x: string) => parts.push(`  - ${x}`));
+      if (i.metrics && Object.keys(i.metrics).length) {
+        Object.entries(i.metrics).forEach(([k, v]) => parts.push(`  - Metric: ${k} = ${v}`));
+      }
+    });
+  });
+  return parts.join("\n");
+}
+
+function renderRiskManagement(prd: PrdJson): string {
+  const risks = prd.riskManagement?.risks;
+  if (!risks?.length) return "TBD";
+  const lines: string[] = [];
+  lines.push("| **Risk** | **Probability** | **Impact** | **Mitigation** |");
+  lines.push("| --- | --- | --- | --- |");
+  risks.forEach((r: any) => {
+    lines.push(
+      `| ${escapeTableCell(r.description)} | ${escapeTableCell(r.probability)} | ${escapeTableCell(r.impact)} | ${escapeTableCell(r.mitigationStrategy || "TBD")} |`
+    );
+  });
+  return lines.join("\n");
+}
+
+function renderDeliveryTimelineAndCost(prd: PrdJson): string {
+  if (!prd.deliveryTimeline) return "TBD";
+  // Reuse existing helper, but strip its top-level headings to fit the Arca-style section.
+  const raw = generateDeliveryTimelineSection(prd.deliveryTimeline);
+  return raw.replace(/^##\s+\d+\.?\s+Delivery Timeline.*\n\n?/m, "").trim() || "TBD";
+}
+
+function renderLaunchPlan(prd: PrdJson): string {
+  if (!prd.launchPlan) return "TBD";
+  const raw = generateLaunchPlanSection(prd.launchPlan);
+  return raw.replace(/^##\s+\d+\.?\s+Launch Plan\n\n?/m, "").trim() || "TBD";
+}
+
+function renderStakeholdersRaci(prd: PrdJson): string {
+  if (!prd.stakeholdersAndRaci) return "TBD";
+  const raw = generateStakeholdersRaciSection(prd.stakeholdersAndRaci);
+  return raw.replace(/^##\s+\d+\.?\s+Stakeholders.*\n\n?/m, "").trim() || "TBD";
+}
+
+function renderOpenQuestionsAndDecisions(prd: PrdJson): string {
+  const oq = prd.openQuestions;
+  if (!oq) return "TBD";
+  const parts: string[] = [];
+  if (oq.questions?.length) {
+    parts.push("**Open Questions**");
+    oq.questions.forEach((q) => {
+      parts.push(`- [${q.priority || "medium"}] ${q.question}${q.context ? ` — ${q.context}` : ""}`);
+    });
+    parts.push("");
+  }
+  if (oq.decisions?.length) {
+    parts.push("**Decisions**");
+    oq.decisions.forEach((d) => {
+      parts.push(`- ${d.decision}${d.rationale ? ` — ${d.rationale}` : ""}${d.date ? ` (${d.date})` : ""}`);
+    });
+  }
+  return parts.length ? parts.join("\n").trim() : "TBD";
+}
+
+function renderChangeLog(prd: PrdJson): string {
+  const version = prd.project?.version || "1.0.0";
+  const date = new Date(prd.project?.createdAt || Date.now()).toLocaleDateString();
+  return [
+    "| Version | Date | Changes | Author |",
+    "| --- | --- | --- | --- |",
+    `| ${escapeTableCell(version)} | ${escapeTableCell(date)} | Initial PRD | Product Team |`,
+  ].join("\n");
+}
+
+function renderAppendix(prd: PrdJson): string {
+  if (!prd.aiMetadata) return "TBD";
+  const parts: string[] = [];
+  parts.push(`**Extracted At:** ${new Date(prd.aiMetadata.extractedAt || Date.now()).toLocaleString()}`);
+  if (prd.aiMetadata.extractionNotes) {
+    const notes = Array.isArray(prd.aiMetadata.extractionNotes) ? prd.aiMetadata.extractionNotes : [prd.aiMetadata.extractionNotes];
+    parts.push(`\n**Extraction Notes:** ${notes.join("; ")}`);
+  }
+  return parts.join("\n");
+}
+
+function escapeTableCell(value: string): string {
+  return String(value)
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n/g, "<br>");
 }

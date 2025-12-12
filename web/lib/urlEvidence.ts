@@ -5,10 +5,14 @@
  */
 
 import * as cheerio from 'cheerio';
+import { createRequire } from "module";
 
 export interface UrlEvidenceOptions {
   timeout?: number; // Timeout in milliseconds (default: 10000)
   maxContentSize?: number; // Max content size in bytes (default: 2MB)
+  maxPages?: number; // For JS-rendered crawling (default: 10 total pages)
+  renderJavascript?: boolean; // Attempt headless rendering for JS-heavy prototypes (default: true)
+  maxRequestsToRecord?: number; // Max XHR/fetch requests to record per page (default: 60)
 }
 
 export interface EvidenceDocument {
@@ -23,6 +27,8 @@ export interface EvidenceDocument {
 
 const DEFAULT_TIMEOUT = 10000; // 10 seconds
 const DEFAULT_MAX_CONTENT_SIZE = 2 * 1024 * 1024; // 2MB
+const DEFAULT_MAX_PAGES = 10;
+const DEFAULT_MAX_REQUESTS = 60;
 
 /**
  * Fetch and analyze a single URL to extract evidence
@@ -171,6 +177,8 @@ function buildEvidenceContent(data: {
   navItems: string[];
   buttons: string[];
   contentPieces: string[];
+  formFields?: Array<{ label?: string; name?: string; placeholder?: string; type?: string }>;
+  networkCalls?: Array<{ method: string; url: string; status?: number }>;
 }): string {
   const parts: string[] = [];
 
@@ -200,7 +208,216 @@ function buildEvidenceContent(data: {
     parts.push(`## Content Samples\n${data.contentPieces.map(c => `- ${c}`).join('\n\n')}\n`);
   }
 
+  if (data.formFields && data.formFields.length > 0) {
+    parts.push(
+      `## Form Fields (Detected)\n${data.formFields
+        .slice(0, 30)
+        .map((f) => `- ${[f.label, f.name, f.placeholder, f.type].filter(Boolean).join(" | ")}`)
+        .join("\n")}\n`
+    );
+  }
+
+  if (data.networkCalls && data.networkCalls.length > 0) {
+    parts.push(
+      `## Network Calls (XHR/fetch)\n${data.networkCalls
+        .slice(0, 60)
+        .map((c) => `- ${c.method} ${c.url}${typeof c.status === "number" ? ` (HTTP ${c.status})` : ""}`)
+        .join("\n")}\n`
+    );
+  }
+
   return parts.join('\n');
+}
+
+async function tryCollectRenderedUrlEvidence(
+  urls: string[],
+  options: UrlEvidenceOptions
+): Promise<EvidenceDocument[] | null> {
+  const renderJavascript = options.renderJavascript ?? true;
+  if (!renderJavascript) return null;
+
+  const timeout = options.timeout || DEFAULT_TIMEOUT;
+  const maxPages = options.maxPages ?? DEFAULT_MAX_PAGES;
+  const maxRequestsToRecord = options.maxRequestsToRecord ?? DEFAULT_MAX_REQUESTS;
+
+  const require = createRequire(import.meta.url);
+  let playwright: any;
+  try {
+    playwright = require("playwright");
+  } catch {
+    console.warn("[urlEvidence] Playwright not installed; falling back to HTML-only extraction");
+    return null;
+  }
+
+  const visited = new Set<string>();
+  const queue: string[] = [];
+
+  for (const u of urls) {
+    const normalized = validateUrl(u);
+    if (normalized) queue.push(normalized);
+  }
+
+  if (!queue.length) return [];
+
+  const evidenceDocs: EvidenceDocument[] = [];
+  const browser = await playwright.chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext({
+      userAgent: "Mozilla/5.0 (compatible; PIE-Bot/1.0; +Product Intelligence Engine)",
+    });
+
+    while (queue.length > 0 && visited.size < maxPages) {
+      const url = queue.shift()!;
+      if (visited.has(url)) continue;
+      visited.add(url);
+
+      console.log(`[urlEvidence] Rendering URL: ${url}`);
+      const page = await context.newPage();
+
+      const networkCalls: Array<{ method: string; url: string; status?: number }> = [];
+      page.on("response", (res: any) => {
+        try {
+          if (networkCalls.length >= maxRequestsToRecord) return;
+          const req = res.request();
+          const type = req.resourceType?.() || "";
+          if (type !== "xhr" && type !== "fetch") return;
+          networkCalls.push({
+            method: (req.method?.() || "GET").toUpperCase(),
+            url: res.url(),
+            status: res.status?.(),
+          });
+        } catch {
+          // ignore
+        }
+      });
+
+      try {
+        await page.goto(url, { timeout, waitUntil: "domcontentloaded" });
+        // Give SPA/hydration time to paint meaningful UI
+        await page.waitForTimeout(1200);
+      } catch (e) {
+        console.warn(`[urlEvidence] Render failed for ${url}, skipping: ${String(e)}`);
+        await page.close().catch(() => {});
+        continue;
+      }
+
+      const extracted = await page.evaluate(() => {
+        const getText = (el: Element | null) => (el?.textContent || "").trim();
+
+        const title = document.title || "";
+        const metaDescription = (document.querySelector('meta[name="description"]') as HTMLMetaElement | null)?.content || "";
+
+        const headings = Array.from(document.querySelectorAll("h1,h2,h3"))
+          .map(getText)
+          .filter((t) => t && t.length < 140);
+
+        const navItems = Array.from(document.querySelectorAll("nav a, header a"))
+          .map(getText)
+          .filter((t) => t && t.length < 100);
+
+        const buttons = Array.from(document.querySelectorAll("button, [role='button'], a.btn, a[role='button']"))
+          .map(getText)
+          .filter((t) => t && t.length < 100);
+
+        const contentPieces = Array.from(document.querySelectorAll("main p, article p, section p, li"))
+          .map(getText)
+          .filter((t) => t.length > 20 && t.length < 500)
+          .slice(0, 25);
+
+        const formFields = Array.from(document.querySelectorAll("input, textarea, select"))
+          .map((el) => {
+            const input = el as HTMLInputElement;
+            const name = input.name || input.id || "";
+            const placeholder = (input as any).placeholder || "";
+            const type = (input as any).type || el.tagName.toLowerCase();
+            // Try to find a label
+            let label = "";
+            if (input.id) {
+              const lbl = document.querySelector(`label[for='${CSS.escape(input.id)}']`);
+              label = getText(lbl);
+            }
+            if (!label) {
+              const parentLabel = el.closest("label");
+              label = getText(parentLabel);
+            }
+            return { label, name, placeholder, type };
+          })
+          .filter((f) => f.label || f.name || f.placeholder)
+          .slice(0, 40);
+
+        const links = Array.from(document.querySelectorAll("a[href]"))
+          .map((a) => (a as HTMLAnchorElement).href)
+          .filter(Boolean);
+
+        return {
+          title,
+          metaDescription,
+          headings: Array.from(new Set(headings)),
+          navItems: Array.from(new Set(navItems)),
+          buttons: Array.from(new Set(buttons)),
+          contentPieces,
+          formFields,
+          links: Array.from(new Set(links)),
+        };
+      });
+
+      // Crawl: add a few same-origin links
+      try {
+        const base = new URL(url);
+        for (const href of extracted.links as string[]) {
+          if (queue.length + visited.size >= maxPages) break;
+          try {
+            const u = new URL(href);
+            if (u.origin !== base.origin) continue;
+            // Ignore obvious non-pages
+            if (u.pathname.match(/\.(png|jpg|jpeg|gif|svg|pdf|zip)$/i)) continue;
+            const normalized = u.toString();
+            if (!visited.has(normalized) && !queue.includes(normalized)) {
+              queue.push(normalized);
+            }
+          } catch {
+            continue;
+          }
+        }
+      } catch {
+        // ignore crawl if URL parsing fails
+      }
+
+      const evidenceContent = buildEvidenceContent({
+        url,
+        title: extracted.title,
+        metaDescription: extracted.metaDescription,
+        headings: extracted.headings,
+        navItems: extracted.navItems,
+        buttons: extracted.buttons,
+        contentPieces: extracted.contentPieces,
+        formFields: extracted.formFields,
+        networkCalls,
+      });
+
+      evidenceDocs.push({
+        content: evidenceContent,
+        metadata: {
+          source: "prototype-url",
+          type: "url-evidence-rendered",
+          url,
+          path: (() => {
+            try {
+              return new URL(url).pathname;
+            } catch {
+              return undefined;
+            }
+          })(),
+        },
+      });
+
+      await page.close().catch(() => {});
+    }
+  } finally {
+    await browser.close().catch(() => {});
+  }
+
+  return evidenceDocs;
 }
 
 /**
@@ -212,6 +429,17 @@ export async function collectUrlEvidence(
   options: UrlEvidenceOptions = {}
 ): Promise<EvidenceDocument[]> {
   console.log(`[urlEvidence] Collecting evidence from ${urls.length} URL(s)`);
+
+  // Prefer rendered extraction for JS-heavy prototypes (Lovable/v0), with fallback to HTML-only.
+  try {
+    const rendered = await tryCollectRenderedUrlEvidence(urls, options);
+    if (rendered && rendered.length > 0) {
+      console.log(`[urlEvidence] Successfully collected ${rendered.length} rendered evidence document(s)`);
+      return rendered;
+    }
+  } catch (e) {
+    console.warn(`[urlEvidence] Rendered evidence collection failed; falling back to HTML-only: ${String(e)}`);
+  }
 
   const evidenceDocs: EvidenceDocument[] = [];
 

@@ -7,17 +7,24 @@ export const acceptanceCriteriaPrompt: SectionPrompt = {
 
 Analyze features/modules and create:
 - Module name and objective
+- Module purpose (why it exists) and high-level constraints (optional but preferred)
+- Key capabilities and system responsibilities (optional but preferred)
 - Feature breakdown with specific acceptance criteria
 - Testable, specific criteria (not vague statements)
 
 Use test files, component props, and API contracts to inform criteria.
+Prefer evidence-backed details (validation rules, error cases, limits, auth) when available.
 
 Return JSON:
 {
   "productRequirements": [
     {
       "module": "Module Name",
+      "purpose": "Why this module exists (optional)",
       "objective": "What this module achieves",
+      "keyCapabilities": ["Optional bullet list"],
+      "systemResponsibilities": ["Optional bullet list"],
+      "constraints": ["Optional bullet list"],
       "features": [
         {
           "name": "Feature Name",
@@ -41,6 +48,7 @@ Return JSON:
     
     const testEvidence = evidence.filter(e => e.type === "test_file");
     const componentEvidence = evidence.filter(e => e.type === "component_analysis");
+    const contractEvidence = evidence.filter(e => e.type === "contracts");
     
     // Group screens by feature area
     const features = groupScreensByFeature(prdJson.screens || []);
@@ -55,6 +63,9 @@ ${testEvidence.map(e => e.content.substring(0, 1000)).join("\n\n")}
 
 ## Component Analysis
 ${componentEvidence.map(e => e.content.substring(0, 1000)).join("\n\n")}
+
+## Contracts / Schemas (if any)
+${contractEvidence.map(e => e.content.substring(0, 2000)).join("\n\n") || "None"}
 
 ## API Endpoints
 ${prdJson.api?.slice(0, 10).map(e => `- ${e.method} ${e.endpoint}`).join("\n") || "None"}

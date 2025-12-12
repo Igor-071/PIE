@@ -90,9 +90,11 @@ export interface WebAndContentNotes {
 export interface ProblemDefinition {
     context?: string;
     primaryProblem?: string;
+    marketGap?: string;
     secondaryProblems?: string[];
     businessImpact?: string;
     userPainPoints?: string[];
+    outcomes?: string[];
     hypotheses?: string[];
     constraints?: string[];
 }
@@ -299,6 +301,7 @@ export interface PrdJson {
     dependencies?: Dependencies | EnhancedDependencies;
     roleDefinition?: RoleDefinition;
     productRequirements?: ProductRequirement[];
+    dependencyMapping?: DependencyMappingEntry[];
     criticalUserFlows?: CriticalUserFlow[] | EnhancedCriticalUserFlow[];
     technicalRequirements?: TechnicalRequirement[];
     nonFunctionalRequirements?: NonFunctionalRequirement[];
@@ -355,8 +358,16 @@ export interface MvpFeature {
 }
 export interface MvpScope {
     phase?: string;
+    inScope?: string[];
     features?: MvpFeature[];
     outOfScope?: string[];
+    roleStages?: Array<{
+        role: string;
+        stages: Array<{
+            name: string;
+            items: string[];
+        }>;
+    }>;
 }
 export interface Assumptions {
     technical?: string[];
@@ -402,11 +413,20 @@ export interface AcceptanceCriteria {
 export interface ProductRequirement {
     module: string;
     objective: string;
+    purpose?: string;
+    keyCapabilities?: string[];
+    systemResponsibilities?: string[];
+    constraints?: string[];
     features: Array<{
         name: string;
         description: string;
         acceptanceCriteria: AcceptanceCriteria[];
     }>;
+}
+export interface DependencyMappingEntry {
+    featureArea: string;
+    dependsOn: string[];
+    description?: string;
 }
 export interface UserFlowStep {
     stepNumber: number;

@@ -15,6 +15,7 @@ Return JSON:
 {
   "mvpScope": {
     "phase": "Phase 1 / MVP",
+    "inScope": ["High-level in-scope items (optional)", "..."],
     "features": [
       {
         "name": "Feature Name",
@@ -25,6 +26,15 @@ Return JSON:
       }
     ],
     "outOfScope": ["Feature not in MVP", ...]
+    ,
+    "roleStages": [
+      {
+        "role": "Role name",
+        "stages": [
+          { "name": "Stage name", "items": ["Capability/step", "..."] }
+        ]
+      }
+    ]
   },
   "questions": []
 }`,
@@ -33,6 +43,7 @@ Return JSON:
     const { prdJson } = context;
     
     const features = groupScreensByFeature(prdJson.screens || []);
+    const roles = prdJson.roleDefinition?.roles?.map(r => r.name) || [];
     
     return `# Define MVP Scope
 
@@ -42,8 +53,15 @@ ${features.map(f => `### ${f.name}\nScreens: ${f.screens.join(", ")}`).join("\n\
 ## Key Features from Solution
 ${prdJson.solutionOverview?.keyFeatures?.join("\n- ") || "None"}
 
+## Roles Detected
+${roles.length ? roles.map(r => `- ${r}`).join("\n") : "None"}
+
 ## Task
-Prioritize features for MVP. Include core value features, mark dependencies, and list out-of-scope items.`;
+Prioritize features for MVP. Include:
+- A high-level in-scope list (inScope)
+- A structured feature list with priority/dependencies
+- Optional role/stage breakdown (roleStages) if roles can be inferred
+- An explicit out-of-scope list`;
   },
 
   parseResponse: (response: string): PromptResult => {

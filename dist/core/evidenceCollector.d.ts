@@ -1,4 +1,4 @@
-export type EvidenceType = "repo_readme" | "repo_docs" | "uploaded_brief" | "package_metadata" | "code_summary" | "config_file" | "test_file" | "component_analysis" | "auth_patterns" | "code_patterns";
+export type EvidenceType = "repo_readme" | "repo_docs" | "uploaded_brief" | "package_metadata" | "code_summary" | "config_file" | "test_file" | "component_analysis" | "auth_patterns" | "code_patterns" | "contracts";
 export type EvidenceMode = "tier2" | "tier3" | "full";
 export interface EvidenceDocument {
     id: string;

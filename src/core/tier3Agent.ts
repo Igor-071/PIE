@@ -4,6 +4,7 @@ import { executePrompts, PromptContext } from "./prompts/promptTemplate.js";
 import { TokenUsage } from "./tokenTracker.js";
 import { assumptionsPrompt } from "./prompts/assumptions.prompt.js";
 import { dependenciesPrompt } from "./prompts/dependencies.prompt.js";
+import { dependencyMappingPrompt } from "./prompts/dependencyMapping.prompt.js";
 import { riskManagementPrompt } from "./prompts/riskManagement.prompt.js";
 import { goalsAndSuccessCriteriaPrompt } from "./prompts/goalsAndSuccessCriteria.prompt.js";
 import { acceptanceCriteriaPrompt } from "./prompts/acceptanceCriteria.prompt.js";
@@ -67,6 +68,7 @@ export async function runTier3Agent(
     mvpScopePrompt,
     assumptionsPrompt,
     dependenciesPrompt,
+    dependencyMappingPrompt,
     roleDefinitionPrompt,
     acceptanceCriteriaPrompt,
     userFlowsPrompt,
@@ -132,6 +134,10 @@ export async function runTier3Agent(
 
   if (results.dependencies?.sectionData) {
     updatedJson.dependencies = results.dependencies.sectionData;
+  }
+
+  if (results.dependencyMapping?.sectionData) {
+    updatedJson.dependencyMapping = results.dependencyMapping.sectionData;
   }
 
   if (results.roleDefinition?.sectionData) {

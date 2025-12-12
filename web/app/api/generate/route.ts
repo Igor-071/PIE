@@ -444,7 +444,11 @@ async function processJob(
       }
 
       // Step 3: Collect evidence from repository and/or URLs
-      let evidence: any[] = [];
+      let repoEvidenceTier2: any[] = [];
+      let repoEvidenceTier3: any[] = [];
+      let urlEvidence: any[] = [];
+      let evidenceTier2: any[] = [];
+      let evidenceTier3: any[] = [];
       
       if (hasZip && unzippedPath) {
         addStep(jobId, "Collecting evidence from repository...", "active");
@@ -459,12 +463,12 @@ async function processJob(
         }
 
         // Collect evidence in Tier 2 mode (business-focused, excludes technical details)
-        evidence = await collectEvidence(unzippedPath, {
+        repoEvidenceTier2 = await collectEvidence(unzippedPath, {
           briefText: briefText || null,
           briefFiles: briefFilePaths.length > 0 ? briefFilePaths : undefined,
           mode: "tier2", // Use Tier 2 mode for business strategy analysis
-        });
-        addStep(jobId, `Collected ${evidence.length} evidence document${evidence.length !== 1 ? 's' : ''} from repository`, "completed");
+        }, tier1);
+        addStep(jobId, `Collected ${repoEvidenceTier2.length} evidence document${repoEvidenceTier2.length !== 1 ? 's' : ''} from repository (Tier 2 set)`, "completed");
       }
       
       // Collect evidence from prototype URLs (if provided)
@@ -481,18 +485,29 @@ async function processJob(
         }
 
         const { collectUrlEvidence } = await import("@/lib/urlEvidence");
-        const urlEvidence = await collectUrlEvidence(prototypeUrls, {
+        urlEvidence = await collectUrlEvidence(prototypeUrls, {
           timeout: 10000,
           maxContentSize: 2 * 1024 * 1024,
+          maxPages: 10,
+          renderJavascript: true,
         });
-        
-        // Merge URL evidence with repository evidence
-        evidence = [...evidence, ...urlEvidence];
         
         addStep(jobId, `Collected ${urlEvidence.length} evidence document${urlEvidence.length !== 1 ? 's' : ''} from URLs`, "completed");
       }
       
-      console.log(`[processJob] Total evidence documents: ${evidence.length}`);
+      // Build Tier 2 evidence (smaller) and Tier 3 evidence (richer) to improve PRD quality without inflating Tier 2 tokens.
+      evidenceTier2 = [...repoEvidenceTier2, ...urlEvidence];
+      if (hasZip && unzippedPath) {
+        // Tier 3 set includes technical evidence (tests/config/components/patterns) for more precise requirements.
+        repoEvidenceTier3 = await collectEvidence(unzippedPath, {
+          briefText: briefText || null,
+          briefFiles: briefFilePaths.length > 0 ? briefFilePaths : undefined,
+          mode: "tier3",
+        }, tier1);
+      }
+      evidenceTier3 = [...repoEvidenceTier3, ...urlEvidence];
+
+      console.log(`[processJob] Evidence documents: tier2=${evidenceTier2.length}, tier3=${evidenceTier3.length}`);
 
       // Step 4: Build initial PRD JSON
       addStep(jobId, "Building initial PRD structure...", "active");
@@ -515,7 +530,7 @@ async function processJob(
 
       let lastTier2Message = "";
       
-      const tier2Result = await runTier2Agent(baseJson, evidence, {
+      const tier2Result = await runTier2Agent(baseJson, evidenceTier2, {
         maxQuestions: 7,
         onProgress: (progress: number, message: string) => {
           if (!isJobCancelled(jobId)) {
@@ -553,7 +568,7 @@ async function processJob(
       }
 
       let lastTier3Message = "";
-      const tier3Result = await runTier3Agent(tier2Result.updatedJson, evidence, tier1, {
+      const tier3Result = await runTier3Agent(tier2Result.updatedJson, evidenceTier3, tier1, {
         onProgress: (progress: number, message: string) => {
           if (!isJobCancelled(jobId)) {
             // Create a new step if message changed significantly (new prompt being executed)

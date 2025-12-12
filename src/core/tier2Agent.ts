@@ -210,7 +210,7 @@ Transform technical code analysis and evidence documents into a rich, strategic 
 - coreValues: Array of company values
 - problemStatement: What problem this solves
 - solutionStatement: How it solves it
-- toneOfVoice: Brand communication style
+- toneOfVoice: Array of brand communication style descriptors (e.g., ["professional", "clear", "supportive"])
 - brandEthos, brandArchetype, brandPromise
 
 ### targetAudience (array of personas)
@@ -224,22 +224,25 @@ Each persona should have:
 
 ### problemDefinition
 - primaryProblem: Core problem being solved
+- marketGap: What existing solutions fail to address (why this product is needed)
 - secondaryProblems: Related issues
 - userPainPoints: Specific user frustrations
 - businessImpact: How problem affects business
+- outcomes: Array of clear, measurable outcomes the product aims to achieve (e.g., ["Reduce processing time by 50%", "Increase user satisfaction score to 4.5+"])
 
 ### solutionOverview
 - valueProposition: Why users should choose this
-- keyFeatures: Core capabilities
-- differentiators: What makes it unique
-- nonFunctionalRequirements: Performance, security needs
+- keyFeatures: Array of core capabilities
+- differentiators: Array of what makes it unique (e.g., ["AI-powered", "Real-time sync", "Enterprise security"])
+- nonFunctionalRequirements: Array of performance, security needs
 
 ### leanCanvas
 - uniqueValueProposition
-- customerSegments
-- keyMetrics
-- channels
-- costStructure, revenueStreams
+- customerSegments: Array of customer segment descriptors
+- keyMetrics: Array of metrics to track
+- channels: Array of distribution channels
+- costStructure: Array of cost items
+- revenueStreams: Array of revenue sources
 
 ### Other strategic fields
 - positioningAndMessaging

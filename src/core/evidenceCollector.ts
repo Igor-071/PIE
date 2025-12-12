@@ -3,7 +3,18 @@ import * as path from "path";
 import { parseFile } from "./fileParser.js";
 import { validatePath } from "./pathValidator.js";
 
-export type EvidenceType = "repo_readme" | "repo_docs" | "uploaded_brief" | "package_metadata" | "code_summary" | "config_file" | "test_file" | "component_analysis" | "auth_patterns" | "code_patterns";
+export type EvidenceType =
+  | "repo_readme"
+  | "repo_docs"
+  | "uploaded_brief"
+  | "package_metadata"
+  | "code_summary"
+  | "config_file"
+  | "test_file"
+  | "component_analysis"
+  | "auth_patterns"
+  | "code_patterns"
+  | "contracts";
 
 export type EvidenceMode = "tier2" | "tier3" | "full";
 
@@ -82,37 +93,21 @@ export async function collectEvidence(
   }
 
   // Collect documentation files from /docs directory
-  const docsPath = path.join(repoPath, "docs");
-  try {
-    // Validate docs path stays within repo
-    const validatedDocsPath = validatePath("docs", repoPath);
-    const entries = await fs.readdir(validatedDocsPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isFile()) {
-        const fileName = entry.name.toLowerCase();
-        // Only process markdown and text files
-        if (fileName.endsWith(".md") || fileName.endsWith(".txt")) {
-          try {
-            // Validate file path stays within docs directory
-            const filePath = validatePath(entry.name, validatedDocsPath);
-            const content = await fs.readFile(filePath, "utf-8");
-            documents.push({
-              id: `doc-${entry.name}`,
-              type: "repo_docs",
-              title: `Documentation: ${entry.name}`,
-              content,
-              path: filePath,
-            });
-          } catch {
-            // Skip files that can't be read as text or fail path validation
-            continue;
-          }
-        }
-      }
-    }
-  } catch {
-    // /docs directory doesn't exist or path validation failed, skip
-  }
+  // Expanded doc directories for real-world repos
+  // (keep shallow and size-capped to control token usage)
+  await collectDocsFromDirectories(repoPath, documents, [
+    "docs",
+    "doc",
+    "documentation",
+    "prd",
+    "product",
+    "requirements",
+    "spec",
+    "specs",
+    "adr",
+    "architecture",
+    "design",
+  ]);
 
   // Add uploaded brief text if provided
   if (options.briefText && options.briefText.trim().length > 0) {
@@ -176,9 +171,143 @@ export async function collectEvidence(
   if (codePatterns) {
     documents.push(codePatterns);
     }
+
+  // Collect API/data contracts (OpenAPI/GraphQL/schemas/validators)
+  const contractEvidence = await collectContractEvidence(repoPath);
+  if (contractEvidence) {
+    documents.push(contractEvidence);
+  }
   }
 
   return documents;
+}
+
+async function collectDocsFromDirectories(
+  repoPath: string,
+  documents: EvidenceDocument[],
+  dirNames: string[]
+): Promise<void> {
+  const MAX_FILES = 30;
+  const MAX_CHARS_PER_FILE = 25_000;
+
+  for (const dirName of dirNames) {
+    if (documents.length >= MAX_FILES) return;
+    try {
+      const validatedDir = validatePath(dirName, repoPath);
+      const entries = await fs.readdir(validatedDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (documents.length >= MAX_FILES) return;
+        if (!entry.isFile()) continue;
+        const lower = entry.name.toLowerCase();
+        if (!lower.endsWith(".md") && !lower.endsWith(".txt")) continue;
+        try {
+          const filePath = validatePath(entry.name, validatedDir);
+          const raw = await fs.readFile(filePath, "utf-8");
+          const content = raw.length > MAX_CHARS_PER_FILE ? raw.slice(0, MAX_CHARS_PER_FILE) + "\n\n... (truncated)" : raw;
+          documents.push({
+            id: `doc-${dirName}-${entry.name}`,
+            type: "repo_docs",
+            title: `Documentation (${dirName}): ${entry.name}`,
+            content,
+            path: filePath,
+          });
+        } catch {
+          continue;
+        }
+      }
+    } catch {
+      // directory doesn't exist or not readable
+      continue;
+    }
+  }
+}
+
+async function collectContractEvidence(repoPath: string): Promise<EvidenceDocument | null> {
+  const MAX_FILES = 12;
+  const MAX_CHARS_PER_FILE = 8_000;
+
+  const candidateFiles: string[] = [];
+
+  async function traverse(dirPath: string, depth: number): Promise<void> {
+    if (candidateFiles.length >= MAX_FILES) return;
+    if (depth > 4) return;
+
+    let entries: any[];
+    try {
+      entries = await fs.readdir(dirPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (candidateFiles.length >= MAX_FILES) return;
+
+      // Skip heavy/irrelevant directories
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist" || entry.name === "build") {
+          continue;
+        }
+        if (entry.name.startsWith(".")) continue;
+
+        const next = path.join(dirPath, entry.name);
+        await traverse(next, depth + 1);
+        continue;
+      }
+
+      if (!entry.isFile()) continue;
+
+      const name = entry.name.toLowerCase();
+      const looksLikeContract =
+        name.includes("openapi") ||
+        name.includes("swagger") ||
+        name.includes("api-spec") ||
+        name.includes("contract") ||
+        name.endsWith(".graphql") ||
+        name.endsWith(".gql") ||
+        name.endsWith(".proto") ||
+        name.endsWith(".schema.json") ||
+        name.endsWith(".jsonschema") ||
+        name.endsWith(".openapi.json") ||
+        name.endsWith(".openapi.yaml") ||
+        name.endsWith(".openapi.yml") ||
+        name === "openapi.json" ||
+        name === "openapi.yaml" ||
+        name === "openapi.yml" ||
+        name === "swagger.json" ||
+        name === "swagger.yaml" ||
+        name === "swagger.yml";
+
+      if (!looksLikeContract) continue;
+      candidateFiles.push(path.relative(repoPath, path.join(dirPath, entry.name)));
+    }
+  }
+
+  await traverse(repoPath, 0);
+  if (candidateFiles.length === 0) return null;
+
+  let content = "# Contracts & Schemas Detected\n\n";
+  content += `Found ${candidateFiles.length} potential contract/schema file(s). Showing up to ${MAX_FILES}.\n\n`;
+
+  for (const rel of candidateFiles.slice(0, MAX_FILES)) {
+    try {
+      const abs = validatePath(rel, repoPath);
+      const raw = await fs.readFile(abs, "utf-8");
+      const snippet = raw.length > MAX_CHARS_PER_FILE ? raw.slice(0, MAX_CHARS_PER_FILE) + "\n\n... (truncated)" : raw;
+      content += `## ${rel}\n\n`;
+      content += "```text\n";
+      content += snippet;
+      content += "\n```\n\n";
+    } catch {
+      continue;
+    }
+  }
+
+  return {
+    id: "contracts-evidence",
+    type: "contracts",
+    title: "Contracts & Schemas (OpenAPI/GraphQL/JSON Schema/etc.)",
+    content,
+  };
 }
 
 /**

@@ -155,12 +155,16 @@
   "problemDefinition": {
     "context": "Background information from situation analysis or market context sections",
     "primaryProblem": "Core problem statement from brief's problem/challenge section or user research findings",
+    "marketGap": "What existing solutions/tools fail to address and why this product is needed now",
     "secondaryProblems": [
       "Related issues from extended problem analysis or user pain points"
     ],
     "businessImpact": "Impact metrics or business case from ROI or business justification sections",
     "userPainPoints": [
       "User challenges from research findings or pain point analysis sections"
+    ],
+    "outcomes": [
+      "Clear, measurable outcomes this product aims to achieve for users and the business"
     ],
     "hypotheses": [
       "Assumptions to test from hypothesis sections or research questions"
@@ -236,6 +240,303 @@
     ],
     "revenueStreams": [
       "Revenue model from monetisation or pricing strategy sections"
+    ]
+  },
+  "goalsAndSuccessCriteria": {
+    "primaryGoals": [
+      "Primary goal statements (what success looks like)"
+    ],
+    "successMetrics": [
+      {
+        "name": "Metric name",
+        "description": "What this metric measures and why it matters",
+        "target": "Target value / threshold",
+        "measurementMethod": "How this metric will be measured"
+      }
+    ],
+    "kpis": [
+      "Optional KPI list (short-form)"
+    ]
+  },
+  "mvpScope": {
+    "phase": "1",
+    "inScope": [
+      "High-level in-scope items (feature list)"
+    ],
+    "features": [
+      {
+        "name": "Feature name",
+        "description": "Feature description",
+        "priority": "high",
+        "screens": [
+          "Related screens"
+        ],
+        "dependencies": [
+          "Dependencies required for this feature"
+        ]
+      }
+    ],
+    "outOfScope": [
+      "Explicitly out-of-scope items for MVP"
+    ],
+    "roleStages": [
+      {
+        "role": "Role name",
+        "stages": [
+          {
+            "name": "Stage name",
+            "items": [
+              "Step/capability in this stage"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "assumptions": {
+    "technical": [
+      "Technical assumptions"
+    ],
+    "operational": [
+      "Operational assumptions"
+    ],
+    "financial": [
+      "Financial assumptions"
+    ],
+    "legal": [
+      "Legal/compliance assumptions"
+    ]
+  },
+  "dependencies": {
+    "service": [
+      {
+        "name": "Service dependency",
+        "description": "What it is and why it is needed",
+        "impact": "Impact if unavailable or delayed"
+      }
+    ],
+    "operational": [
+      {
+        "description": "Operational dependency (people/process)",
+        "requirement": "Requirement / condition"
+      }
+    ],
+    "content": [
+      {
+        "description": "Content/legal dependency",
+        "source": "Source / owner"
+      }
+    ]
+  },
+  "roleDefinition": {
+    "roles": [
+      {
+        "id": "role-id",
+        "name": "Role name",
+        "description": "Role description"
+      }
+    ],
+    "accessMatrix": [
+      {
+        "feature": "Feature name",
+        "role-id": "Access level (e.g., Read, CRUD)"
+      }
+    ]
+  },
+  "productRequirements": [
+    {
+      "module": "Feature area / module name",
+      "purpose": "Purpose (why this exists)",
+      "objective": "Objective (what this achieves)",
+      "keyCapabilities": [
+        "Key capability bullets (optional)"
+      ],
+      "systemResponsibilities": [
+        "What the system must do (optional)"
+      ],
+      "constraints": [
+        "Constraints/limitations (optional)"
+      ],
+      "features": [
+        {
+          "name": "Feature name",
+          "description": "Feature description",
+          "acceptanceCriteria": [
+            {
+              "id": "ac-1",
+              "description": "Specific, testable criterion",
+              "testable": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "dependencyMapping": [
+    {
+      "featureArea": "Feature area / module name",
+      "dependsOn": [
+        "Dependency name"
+      ],
+      "description": "How/why this dependency blocks or enables delivery"
+    }
+  ],
+  "criticalUserFlows": [
+    {
+      "id": "flow-1",
+      "name": "Flow name",
+      "role": "Role performing the flow",
+      "goal": "User goal",
+      "steps": [
+        {
+          "stepNumber": 1,
+          "action": "User action",
+          "screen": "Optional screen name",
+          "systemResponse": "Optional system response",
+          "painPoint": "Optional pain point"
+        }
+      ]
+    }
+  ],
+  "technicalRequirements": [
+    {
+      "category": "architecture",
+      "requirements": [
+        "Technical requirement"
+      ],
+      "details": {
+        "key": "value"
+      }
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "performance",
+      "requirements": [
+        "NFR requirement"
+      ],
+      "metrics": {
+        "p95": "<2s"
+      }
+    }
+  ],
+  "riskManagement": {
+    "risks": [
+      {
+        "id": "risk-1",
+        "description": "Risk description",
+        "category": "technical",
+        "probability": "medium",
+        "impact": "high",
+        "mitigationStrategy": "Mitigation approach"
+      }
+    ]
+  },
+  "openQuestions": {
+    "questions": [
+      {
+        "id": "q-1",
+        "question": "Open question",
+        "category": "client",
+        "priority": "high",
+        "context": "Why we need an answer"
+      }
+    ],
+    "decisions": [
+      {
+        "id": "d-1",
+        "decision": "Decision statement",
+        "rationale": "Rationale",
+        "date": "YYYY-MM-DD"
+      }
+    ]
+  },
+  "documentMetadata": {
+    "documentOwner": "Document owner / PM",
+    "stakeholders": [
+      "Stakeholder list"
+    ],
+    "collaborators": [
+      "Collaborators / discovery/design contributors"
+    ],
+    "referenceDocuments": [
+      "Reference documents (links)"
+    ],
+    "jiraLink": "Jira link",
+    "trdLink": "TRD link",
+    "lastUpdated": "ISO timestamp or date",
+    "status": "Draft"
+  },
+  "deliveryTimeline": {
+    "phases": [
+      {
+        "name": "Phase name",
+        "duration": "e.g., 6 weeks",
+        "teamSize": {
+          "Fullstack Engineer": 2
+        },
+        "deliverables": [
+          "Deliverable list"
+        ],
+        "milestones": [
+          {
+            "week": 1,
+            "milestone": "Milestone description"
+          }
+        ],
+        "costEstimate": {
+          "min": 100000,
+          "max": 150000
+        }
+      }
+    ]
+  },
+  "launchPlan": {
+    "launchStrategy": {
+      "approach": "Soft launch / phased rollout",
+      "phases": [
+        {
+          "name": "Beta",
+          "duration": "2 weeks",
+          "description": "Description"
+        }
+      ]
+    }
+  },
+  "stakeholdersAndRaci": {
+    "stakeholders": [
+      {
+        "name": "Stakeholder name",
+        "role": "Role",
+        "influence": "high",
+        "interest": "high",
+        "engagementLevel": "Weekly sync"
+      }
+    ],
+    "raciChart": [
+      {
+        "activity": "Activity name",
+        "responsible": [
+          "Engineering"
+        ],
+        "accountable": [
+          "Product"
+        ],
+        "consulted": [
+          "Design"
+        ],
+        "informed": [
+          "Stakeholders"
+        ]
+      }
+    ]
+  },
+  "glossary": {
+    "terms": [
+      {
+        "term": "Term",
+        "definition": "Definition"
+      }
     ]
   },
   "screens": [

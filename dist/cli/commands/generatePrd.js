@@ -20,6 +20,8 @@ export function registerGeneratePrdCommand(program) {
         .option("-b, --brief <file>", "Path to optional brief text file")
         .option("-o, --output <dir>", "Output directory", "./out")
         .option("--max-questions <number>", "Maximum number of questions to generate", "7")
+        .option("--template <path>", "Path to custom PRD template file (defaults to gold standard)")
+        .option("--include-template-instructions", "Include instructional HTML comments in generated PRD", false)
         .action(async (repoZip, options) => {
         try {
             // Resolve paths
@@ -75,6 +77,8 @@ export function registerGeneratePrdCommand(program) {
                 await writePrdArtifacts(tier3Result.updatedJson, allQuestions, {
                     outputDir,
                     projectName: tier1.projectName,
+                    templatePath: options.template,
+                    includeTemplateInstructions: options.includeTemplateInstructions || false,
                 });
                 const sanitizedProjectName = tier1.projectName
                     .toLowerCase()

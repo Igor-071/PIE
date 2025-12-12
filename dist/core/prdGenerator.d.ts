@@ -3,6 +3,7 @@ export interface PrdArtifactsOptions {
     outputDir: string;
     projectName: string;
     templatePath?: string;
+    includeTemplateInstructions?: boolean;
 }
 /**
  * Writes PRD artifacts to the output directory:
