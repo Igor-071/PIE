@@ -500,16 +500,16 @@ export default function PolishChatPanel({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me to improve the PRD..."
+              placeholder="Start typing..."
               disabled={disabled || isLoading}
-              className="w-full h-full px-3 py-2.5 pr-10 border border-[#E7E1E2] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F24B57]/20 focus:border-[#F24B57] resize-none text-sm text-[#161010] placeholder:text-[#161010]/40 disabled:bg-[#F9F9F9] disabled:cursor-not-allowed transition-all bg-white"
-              rows={2}
+              className="w-full h-full px-3 py-1.5 pr-10 border border-[#E7E1E2] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F24B57]/20 focus:border-[#F24B57] resize-none text-sm text-[#161010] placeholder:text-[#161010]/40 disabled:bg-[#F9F9F9] disabled:cursor-not-allowed transition-all bg-white"
+              rows={1}
             />
           </div>
           <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading || disabled}
-            className="px-4 bg-[#F24B57] text-white rounded-lg hover:bg-[#F24B57]/90 disabled:bg-[#E7E1E2] disabled:text-[#161010]/30 disabled:cursor-not-allowed transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-50"
+            className="px-3 py-1.5 bg-[#F24B57] text-white rounded-lg hover:bg-[#F24B57]/90 disabled:bg-[#E7E1E2] disabled:text-[#161010]/30 disabled:cursor-not-allowed transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-50"
             title={disabled ? "Cannot send while reviewing proposal" : "Send message (Enter)"}
           >
             {isLoading ? (
@@ -520,19 +520,6 @@ export default function PolishChatPanel({
               </svg>
             )}
           </button>
-        </div>
-        <div className="mt-2 flex items-center gap-2 text-xs text-[#161010]/50">
-          <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-[#F9F9F9] border border-[#E7E1E2] rounded text-[10px] font-mono font-medium">Enter</kbd>
-            <span>to send</span>
-          </div>
-          <span className="text-[#E7E1E2]">•</span>
-          <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-[#F9F9F9] border border-[#E7E1E2] rounded text-[10px] font-mono font-medium">Shift</kbd>
-            <span>+</span>
-            <kbd className="px-1.5 py-0.5 bg-[#F9F9F9] border border-[#E7E1E2] rounded text-[10px] font-mono font-medium">Enter</kbd>
-            <span>for new line</span>
-          </div>
         </div>
       </div>
 
