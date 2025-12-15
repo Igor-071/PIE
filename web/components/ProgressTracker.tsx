@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import React from "react";
 
 interface Step {
   id: string;
@@ -118,14 +118,6 @@ export default function ProgressTracker({
   const isComplete = status === "complete";
   const hasError = status === "error";
   const isCancelled = status === "cancelled";
-  const stepsEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to bottom when new steps are added
-  useEffect(() => {
-    if (stepsEndRef.current) {
-      stepsEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [steps]);
 
   return (
     <div className="w-full space-y-6">
@@ -351,7 +343,6 @@ export default function ProgressTracker({
                 </div>
               );
             })}
-            <div ref={stepsEndRef} />
           </div>
         </div>
       )}
