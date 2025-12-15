@@ -639,6 +639,9 @@ export default function Home() {
           <PrdView
             jobId={jobState.id}
             markdownFilename={jobState.markdownFilename}
+            tokenUsage={jobState.tokenUsage}
+            validationResult={jobState.validationResult}
+            steps={jobState.steps}
           />
         </div>
       )}

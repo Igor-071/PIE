@@ -5,10 +5,41 @@ import PrdEditor from "./PrdEditor";
 import PolishChatPanel from "./PolishChatPanel";
 import DownloadResults from "./DownloadResults";
 import ConfirmDialog from "./ConfirmDialog";
+import ProgressTracker from "./ProgressTracker";
+
+interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+interface TokenUsageByPhase {
+  phase: string;
+  usage: TokenUsage;
+}
+
+interface ValidationResult {
+  isValid: boolean;
+  score: number;
+  errors: number;
+  warnings: number;
+}
 
 interface PrdViewProps {
   jobId: string;
   markdownFilename: string;
+  tokenUsage?: {
+    total: TokenUsage;
+    byPhase: TokenUsageByPhase[];
+  };
+  validationResult?: ValidationResult;
+  steps?: Array<{
+    id: string;
+    message: string;
+    timestamp: number;
+    status: 'pending' | 'active' | 'completed';
+    progress?: number;
+  }>;
 }
 
 interface PrdData {
@@ -35,7 +66,13 @@ interface Proposal {
   followUpQuestions?: string[];
 }
 
-export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
+export default function PrdView({ 
+  jobId, 
+  markdownFilename,
+  tokenUsage,
+  validationResult: propValidationResult,
+  steps,
+}: PrdViewProps) {
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -199,42 +236,15 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
     <div className="flex flex-col space-y-6">
       {/* Header with tabs */}
       <div className="border-b border-[#E7E1E2] pb-4">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h2 className="text-2xl font-bold text-[#161010]">PRD Editor</h2>
-            {viewMode === "editor" && (
-              <p className="text-xs text-[#161010]/60 mt-1">
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2 h-2 bg-[#F24B57] rounded-full animate-pulse"></span>
-                  Live editing • Changes are local (not saved to files)
-                </span>
-              </p>
-            )}
-          </div>
-          
-          {/* Validation Score */}
-          {prdData.validationResult && (
-            <div className="flex items-center gap-2">
-              <div className={`px-3 py-1 rounded-lg font-medium text-sm ${
-                prdData.validationResult.score >= 80
-                  ? "bg-green-100 text-green-800"
-                  : prdData.validationResult.score >= 60
-                  ? "bg-yellow-100 text-yellow-800"
-                  : "bg-red-100 text-red-800"
-              }`}>
-                Score: {prdData.validationResult.score}/100
-              </div>
-              {prdData.validationResult.errors > 0 && (
-                <span className="text-xs text-red-600">
-                  {prdData.validationResult.errors} error{prdData.validationResult.errors !== 1 ? "s" : ""}
-                </span>
-              )}
-              {prdData.validationResult.warnings > 0 && (
-                <span className="text-xs text-yellow-600">
-                  {prdData.validationResult.warnings} warning{prdData.validationResult.warnings !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold text-[#161010]">PRD Editor</h2>
+          {viewMode === "editor" && (
+            <p className="text-xs text-[#161010]/60 mt-1">
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 bg-[#F24B57] rounded-full animate-pulse"></span>
+                Live editing • Changes are local (not saved to files)
+              </span>
+            </p>
           )}
         </div>
         
@@ -259,14 +269,6 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
           >
             Download Files
           </button>
-          {viewMode === "editor" && (
-            <button
-              onClick={handleCopyMarkdown}
-              className="px-4 py-2 rounded-lg font-medium bg-[#E7E1E2] text-[#161010] hover:bg-[#E7E1E2]/80 transition-all"
-            >
-              Copy Markdown
-            </button>
-          )}
         </div>
         {prdData.hasVersionHistory && (
           <p className="text-xs text-[#161010]/60 mt-2">
@@ -282,8 +284,14 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
           <div className="lg:col-span-2 flex flex-col space-y-4">
             {/* Editor */}
             <div className="border-2 border-[#E7E1E2] rounded-lg bg-white flex flex-col h-[600px]">
-              <div className="border-b border-[#E7E1E2] px-4 py-2 flex-shrink-0">
+              <div className="border-b border-[#E7E1E2] px-4 py-2 flex-shrink-0 flex items-center justify-between">
                 <h3 className="font-semibold text-[#161010] text-sm">Editor</h3>
+                <button
+                  onClick={handleCopyMarkdown}
+                  className="px-2 py-1 rounded text-xs font-medium bg-[#E7E1E2] text-[#161010] hover:bg-[#E7E1E2]/80 transition-all"
+                >
+                  Copy Markdown
+                </button>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 <PrdEditor
@@ -367,11 +375,25 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
 
       {/* Download view */}
       {viewMode === "download" && (
-        <div className="flex-1">
+        <div className="space-y-6">
           <DownloadResults
             jobId={jobId}
             markdownFilename={markdownFilename}
           />
+          
+          {/* Show token usage and validation results */}
+          {(tokenUsage || propValidationResult || steps) && (
+            <div className="bg-white rounded-lg shadow-lg p-8 border border-[#E7E1E2]">
+              <ProgressTracker
+                status="complete"
+                progress={100}
+                message="PRD generation complete"
+                steps={steps}
+                tokenUsage={tokenUsage}
+                validationResult={propValidationResult}
+              />
+            </div>
+          )}
         </div>
       )}
 
