@@ -437,7 +437,7 @@ export default function PolishChatPanel({
         </div>
         
         {/* Composer */}
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-stretch">
           <div className="flex-1 relative">
             <textarea
               value={input}
@@ -445,14 +445,14 @@ export default function PolishChatPanel({
               onKeyPress={handleKeyPress}
               placeholder="Ask me to improve the PRD..."
               disabled={disabled || isLoading}
-              className="w-full px-3 py-2.5 pr-10 border border-[#E7E1E2] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F24B57]/20 focus:border-[#F24B57] resize-none text-sm text-[#161010] placeholder:text-[#161010]/40 disabled:bg-[#F9F9F9] disabled:cursor-not-allowed transition-all bg-white"
+              className="w-full h-full px-3 py-2.5 pr-10 border border-[#E7E1E2] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F24B57]/20 focus:border-[#F24B57] resize-none text-sm text-[#161010] placeholder:text-[#161010]/40 disabled:bg-[#F9F9F9] disabled:cursor-not-allowed transition-all bg-white"
               rows={2}
             />
           </div>
           <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading || disabled}
-            className="p-2.5 bg-[#F24B57] text-white rounded-lg hover:bg-[#F24B57]/90 disabled:bg-[#E7E1E2] disabled:text-[#161010]/30 disabled:cursor-not-allowed transition-all flex items-center justify-center h-[42px] w-[42px] flex-shrink-0 disabled:opacity-50"
+            className="px-4 bg-[#F24B57] text-white rounded-lg hover:bg-[#F24B57]/90 disabled:bg-[#E7E1E2] disabled:text-[#161010]/30 disabled:cursor-not-allowed transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-50"
             title={disabled ? "Cannot send while reviewing proposal" : "Send message (Enter)"}
           >
             {isLoading ? (
