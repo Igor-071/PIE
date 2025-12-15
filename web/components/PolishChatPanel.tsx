@@ -112,7 +112,7 @@ export default function PolishChatPanel({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="border-b border-[#E7E1E2] px-4 py-3">
-        <h3 className="font-semibold text-[#161010]">Polish Agent</h3>
+        <h3 className="font-semibold text-[#161010]">PIE Assistant</h3>
         <p className="text-xs text-[#161010]/60 mt-1">
           Ask to improve clarity, add details, or refine sections
         </p>

@@ -262,7 +262,7 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
           {viewMode === "editor" && (
             <button
               onClick={handleCopyMarkdown}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-[#E7E1E2] text-[#161010] hover:bg-[#E7E1E2]/80 transition-all"
+              className="px-4 py-2 rounded-lg font-medium bg-[#E7E1E2] text-[#161010] hover:bg-[#E7E1E2]/80 transition-all"
             >
               Copy Markdown
             </button>
@@ -308,41 +308,6 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
 
           {/* Right sidebar (1/3 width on large screens) */}
           <div className="flex flex-col space-y-4">
-            {/* Validation details */}
-            {prdData.validationResult && prdData.validationResult.details && (
-              <div className="border-2 border-[#E7E1E2] rounded-lg p-4 bg-white">
-                <h4 className="font-semibold text-[#161010] mb-2">Handoff Readiness</h4>
-                <p className="text-sm text-[#161010]/80 mb-3">
-                  {prdData.validationResult.summary}
-                </p>
-                
-                {prdData.validationResult.details.errors?.length > 0 && (
-                  <div className="mb-3">
-                    <p className="text-xs font-medium text-red-600 mb-1">Errors (blocking):</p>
-                    <ul className="text-xs space-y-1">
-                      {prdData.validationResult.details.errors.slice(0, 3).map((error: any, idx: number) => (
-                        <li key={idx} className="text-red-600">• {error.field}: {error.message}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                {prdData.validationResult.details.warnings?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-yellow-600 mb-1">Warnings (improve quality):</p>
-                    <ul className="text-xs space-y-1">
-                      {prdData.validationResult.details.warnings.slice(0, 3).map((warning: any, idx: number) => (
-                        <li key={idx} className="text-yellow-600">• {warning.field}: {warning.message}</li>
-                      ))}
-                      {prdData.validationResult.details.warnings.length > 3 && (
-                        <li className="text-yellow-600/60">+ {prdData.validationResult.details.warnings.length - 3} more...</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-            
             {/* Chat panel */}
             <div className="border-2 border-[#E7E1E2] rounded-lg flex flex-col h-[600px]">
               <PolishChatPanel
