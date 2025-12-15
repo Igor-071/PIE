@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import PrdEditor from "./PrdEditor";
 import PolishChatPanel from "./PolishChatPanel";
 import DownloadResults from "./DownloadResults";
-import ConfirmDialog from "./ConfirmDialog";
 import ProgressTracker from "./ProgressTracker";
 
 interface TokenUsage {
@@ -76,11 +75,8 @@ export default function PrdView({
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentProposal, setCurrentProposal] = useState<Proposal | null>(null);
-  const [showDiff, setShowDiff] = useState(false);
   const [viewMode, setViewMode] = useState<"editor" | "download">("editor");
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   useEffect(() => {
     loadPrdData();
@@ -117,13 +113,10 @@ export default function PrdView({
     }
   };
 
-  const handleProposalReceived = (proposal: Proposal) => {
-    setCurrentProposal(proposal);
-    setShowDiff(true);
-  };
-
-  const handleApplyProposal = async () => {
-    if (!currentProposal || !prdData) return;
+  const handleApplyProposal = async (proposal: Proposal): Promise<{ ok: boolean; message?: string }> => {
+    if (!prdData) {
+      return { ok: false, message: "PRD data not loaded" };
+    }
 
     const previousMarkdown = prdData.markdown;
     setApplyMessage(null);
@@ -136,8 +129,8 @@ export default function PrdView({
         },
         body: JSON.stringify({
           jobId,
-          markdownPatch: currentProposal.markdownPatch,
-          jsonPatch: currentProposal.jsonPatch,
+          markdownPatch: proposal.markdownPatch,
+          jsonPatch: proposal.jsonPatch,
         }),
       });
 
@@ -166,9 +159,9 @@ export default function PrdView({
       }
       
       // Show feedback about what was applied
-      if (!markdownChanged && currentProposal.markdownPatch) {
+      if (!markdownChanged && proposal.markdownPatch) {
         setApplyMessage("Applied, but no markdown changes detected. The proposal may have only updated JSON structure.");
-      } else if (!markdownChanged && !currentProposal.markdownPatch && currentProposal.jsonPatch) {
+      } else if (!markdownChanged && !proposal.markdownPatch && proposal.jsonPatch) {
         setApplyMessage("Applied JSON changes. No markdown changes were included in this proposal.");
       } else {
         setApplyMessage("Changes applied successfully!");
@@ -177,24 +170,13 @@ export default function PrdView({
       // Clear message after 5 seconds
       setTimeout(() => setApplyMessage(null), 5000);
       
-      // Clear proposal and close diff
-      setCurrentProposal(null);
-      setShowDiff(false);
+      return { ok: true };
 
     } catch (err) {
       console.error("[PrdView] Error applying proposal:", err);
-      alert(err instanceof Error ? err.message : "Failed to apply changes");
+      const errorMessage = err instanceof Error ? err.message : "Failed to apply changes";
+      return { ok: false, message: errorMessage };
     }
-  };
-
-  const handleDiscardClick = () => {
-    setShowDiscardConfirm(true);
-  };
-
-  const handleDiscardConfirm = () => {
-    setCurrentProposal(null);
-    setShowDiff(false);
-    setShowDiscardConfirm(false);
   };
 
   if (isLoading) {
@@ -233,9 +215,9 @@ export default function PrdView({
   };
 
   return (
-    <div className="flex flex-col space-y-6">
+    <div className="flex flex-col h-full min-h-0 gap-6">
       {/* Header with tabs */}
-      <div className="border-b border-[#E7E1E2] pb-4">
+      <div className="border-b border-[#E7E1E2] pb-4 flex-shrink-0">
         <div className="mb-4">
           <h2 className="text-2xl font-bold text-[#161010]">PRD Editor</h2>
           {viewMode === "editor" && (
@@ -279,11 +261,11 @@ export default function PrdView({
 
       {/* Editor view */}
       {viewMode === "editor" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-hidden">
           {/* Main editor area (2/3 width on large screens) */}
-          <div className="lg:col-span-2 flex flex-col space-y-4">
+          <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
             {/* Editor */}
-            <div className="border-2 border-[#E7E1E2] rounded-lg bg-white flex flex-col h-[600px]">
+            <div className="border-2 border-[#E7E1E2] rounded-lg bg-white flex flex-col h-full min-h-0">
               <div className="border-b border-[#E7E1E2] px-4 py-2 flex-shrink-0 flex items-center justify-between">
                 <h3 className="font-semibold text-[#161010] text-sm">Editor</h3>
                 <button
@@ -304,7 +286,7 @@ export default function PrdView({
 
             {/* Apply feedback message */}
             {applyMessage && (
-              <div className={`p-3 rounded-lg border-2 ${
+              <div className={`p-3 rounded-lg border-2 flex-shrink-0 ${
                 applyMessage.includes("successfully")
                   ? "bg-green-50 border-green-200 text-green-800"
                   : "bg-yellow-50 border-yellow-200 text-yellow-800"
@@ -315,60 +297,15 @@ export default function PrdView({
           </div>
 
           {/* Right sidebar (1/3 width on large screens) */}
-          <div className="flex flex-col space-y-4">
+          <div className="flex flex-col gap-4 min-h-0">
             {/* Chat panel */}
-            <div className="border-2 border-[#E7E1E2] rounded-lg flex flex-col h-[600px]">
+            <div className="border-2 border-[#E7E1E2] rounded-lg flex flex-col h-full min-h-0">
               <PolishChatPanel
                 jobId={jobId}
-                onProposalReceived={handleProposalReceived}
-                disabled={showDiff}
+                onApplyProposal={handleApplyProposal}
+                disabled={false}
               />
             </div>
-
-            {/* Diff review panel */}
-            {showDiff && currentProposal && (
-              <div className="border-2 border-[#F24B57] rounded-lg p-4 bg-[#F24B57]/5">
-                <h4 className="font-semibold text-[#161010] mb-2">Proposed Changes</h4>
-                <p className="text-sm text-[#161010]/80 mb-4">
-                  {currentProposal.assistantMessage}
-                </p>
-                
-                {currentProposal.markdownPatch && (
-                  <div className="mb-4">
-                    <p className="text-xs font-medium text-[#161010]/60 mb-2">Markdown changes:</p>
-                    <pre className="text-xs bg-white p-2 rounded border border-[#E7E1E2] overflow-x-auto max-h-40">
-                      {currentProposal.markdownPatch}
-                    </pre>
-                  </div>
-                )}
-                
-                {currentProposal.followUpQuestions && currentProposal.followUpQuestions.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-xs font-medium text-[#161010]/60 mb-2">Questions:</p>
-                    <ul className="text-sm space-y-1">
-                      {currentProposal.followUpQuestions.map((q, idx) => (
-                        <li key={idx} className="text-[#161010]/80">• {q}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleApplyProposal}
-                    className="flex-1 bg-[#F24B57] text-white py-2 px-4 rounded-lg font-medium hover:bg-[#F24B57]/90 transition-all"
-                  >
-                    Apply
-                  </button>
-                  <button
-                    onClick={handleDiscardClick}
-                    className="flex-1 bg-[#E7E1E2] text-[#161010] py-2 px-4 rounded-lg font-medium hover:bg-[#E7E1E2]/80 transition-all"
-                  >
-                    Discard
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -397,17 +334,6 @@ export default function PrdView({
         </div>
       )}
 
-      {/* Confirm Discard Proposal Dialog */}
-      <ConfirmDialog
-        isOpen={showDiscardConfirm}
-        title="Discard Proposal?"
-        message="Are you sure you want to discard these proposed changes? You can always ask the Polish Agent for new suggestions."
-        confirmLabel="Yes, Discard"
-        cancelLabel="Keep Proposal"
-        confirmVariant="danger"
-        onConfirm={handleDiscardConfirm}
-        onCancel={() => setShowDiscardConfirm(false)}
-      />
     </div>
   );
 }

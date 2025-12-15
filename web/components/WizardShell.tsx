@@ -24,11 +24,12 @@ export default function WizardShell({
   showStartOver = false,
 }: WizardShellProps) {
   const currentStepIndex = steps.findIndex((s) => s.id === currentStep);
+  const isWorkspace = currentStep === "workspace";
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F9F9F9]">
+    <div className={isWorkspace ? "h-screen overflow-hidden flex flex-col bg-[#F9F9F9]" : "min-h-screen flex flex-col bg-[#F9F9F9]"}>
       {/* Header */}
-      <header className="bg-white border-b border-[#E7E1E2] sticky top-0 z-50 shadow-sm">
+      <header className="bg-white border-b border-[#E7E1E2] sticky top-0 z-50 shadow-sm flex-shrink-0">
         <div className="container mx-auto px-4 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -52,7 +53,7 @@ export default function WizardShell({
       </header>
 
       {/* Step Indicator */}
-      <div className="bg-white border-b border-[#E7E1E2] shadow-sm">
+      <div className="bg-white border-b border-[#E7E1E2] shadow-sm flex-shrink-0">
         <div className="container mx-auto px-4 lg:px-8 py-4">
           <div className="flex items-center justify-center gap-4">
             {steps.map((step, index) => {
@@ -118,7 +119,7 @@ export default function WizardShell({
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-4 lg:px-8 py-8 flex flex-col min-h-0">
+      <main className={`flex-1 container mx-auto px-4 lg:px-8 ${isWorkspace ? 'py-8 flex flex-col min-h-0 overflow-hidden' : 'py-8 flex flex-col min-h-0'}`}>
         {children}
       </main>
     </div>
