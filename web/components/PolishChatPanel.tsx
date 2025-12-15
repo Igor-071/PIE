@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import ConfirmDialog from "./ConfirmDialog";
+import { extractBeforeAfter, getChangeLocation } from "@/lib/diffParser";
 
 interface Proposal {
   assistantMessage: string;
@@ -22,12 +23,14 @@ interface PolishChatPanelProps {
   jobId: string;
   onApplyProposal?: (proposal: Proposal) => Promise<{ ok: boolean; message?: string }>;
   disabled?: boolean;
+  onScrollToChange?: (section?: string) => void;
 }
 
 export default function PolishChatPanel({ 
   jobId, 
   onApplyProposal,
-  disabled = false 
+  disabled = false,
+  onScrollToChange,
 }: PolishChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -176,6 +179,15 @@ export default function PolishChatPanel({
     try {
       const result = await onApplyProposal(proposal);
       if (result.ok) {
+        // Extract section info for scrolling
+        if (proposal.markdownPatch && onScrollToChange) {
+          const { section } = extractBeforeAfter(proposal.markdownPatch);
+          // Delay to ensure editor content has updated after apply
+          setTimeout(() => {
+            onScrollToChange(section);
+          }, 300);
+        }
+        
         // Remove proposal from message after successful apply
         setMessages(prev => prev.map(msg => 
           msg.id === messageId ? { ...msg, proposal: undefined } : msg
@@ -314,35 +326,80 @@ export default function PolishChatPanel({
                       </div>
                     )}
                     
-                    {message.proposal.markdownPatch && (
-                      <div>
-                        <button
-                          onClick={() => setExpandedDiffId(expandedDiffId === message.id ? null : message.id)}
-                          className="text-xs font-medium text-[#F24B57] hover:text-[#F24B57]/80 flex items-center gap-1"
-                        >
-                          {expandedDiffId === message.id ? (
-                            <>
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                              </svg>
-                              Hide diff
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                              Show diff
-                            </>
+                    {message.proposal.markdownPatch && (() => {
+                      const { before, after, section } = extractBeforeAfter(message.proposal.markdownPatch);
+                      const isExpanded = expandedDiffId === message.id;
+                      
+                      return (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <button
+                              onClick={() => setExpandedDiffId(isExpanded ? null : message.id)}
+                              className="text-xs font-medium text-[#F24B57] hover:text-[#F24B57]/80 flex items-center gap-1"
+                            >
+                              {isExpanded ? (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                  Hide changes
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                  Show changes
+                                </>
+                              )}
+                            </button>
+                            {section && onScrollToChange && (
+                              <button
+                                onClick={() => onScrollToChange(section)}
+                                className="text-xs font-medium text-[#161010]/60 hover:text-[#F24B57] flex items-center gap-1"
+                                title={`Scroll to: ${section}`}
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                                Go to section
+                              </button>
+                            )}
+                          </div>
+                          {isExpanded && (
+                            <div className="mt-2 space-y-3">
+                              {before.trim() && (
+                                <div>
+                                  <div className="text-xs font-semibold text-[#161010]/70 mb-1.5 flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                                    Before
+                                  </div>
+                                  <div className="text-xs bg-red-50 border border-red-200 rounded p-2.5 max-h-32 overflow-y-auto text-[#161010]/90 whitespace-pre-wrap font-mono">
+                                    {before.trim()}
+                                  </div>
+                                </div>
+                              )}
+                              {after.trim() && (
+                                <div>
+                                  <div className="text-xs font-semibold text-[#161010]/70 mb-1.5 flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                                    {before.trim() ? "After" : "New Content"}
+                                  </div>
+                                  <div className="text-xs bg-green-50 border border-green-200 rounded p-2.5 max-h-32 overflow-y-auto text-[#161010]/90 whitespace-pre-wrap font-mono">
+                                    {after.trim()}
+                                  </div>
+                                </div>
+                              )}
+                              {!before.trim() && !after.trim() && (
+                                <div className="text-xs text-[#161010]/50 italic p-2 bg-[#F9F9F9] rounded border border-[#E7E1E2]">
+                                  No visible changes detected in markdown
+                                </div>
+                              )}
+                            </div>
                           )}
-                        </button>
-                        {expandedDiffId === message.id && (
-                          <pre className="mt-2 text-[10px] bg-[#F9F9F9] p-2 rounded border border-[#E7E1E2] overflow-x-auto max-h-40 text-[#161010]/80">
-                            {message.proposal.markdownPatch}
-                          </pre>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      );
+                    })()}
                     
                     <div className="flex gap-2 pt-1">
                       <button

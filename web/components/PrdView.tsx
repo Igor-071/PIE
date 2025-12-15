@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import PrdEditor from "./PrdEditor";
+import { useState, useEffect, useRef } from "react";
+import PrdEditor, { PrdEditorRef } from "./PrdEditor";
 import PolishChatPanel from "./PolishChatPanel";
 import DownloadResults from "./DownloadResults";
 import ProgressTracker from "./ProgressTracker";
@@ -77,6 +77,7 @@ export default function PrdView({
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"editor" | "download">("editor");
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
+  const editorRef = useRef<PrdEditorRef>(null);
 
   useEffect(() => {
     loadPrdData();
@@ -277,6 +278,7 @@ export default function PrdView({
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 <PrdEditor
+                  ref={editorRef}
                   markdown={prdData.markdown}
                   onChange={handleMarkdownChange}
                   readOnly={false}
@@ -304,6 +306,9 @@ export default function PrdView({
                 jobId={jobId}
                 onApplyProposal={handleApplyProposal}
                 disabled={false}
+                onScrollToChange={(section) => {
+                  editorRef.current?.scrollToSection(section);
+                }}
               />
             </div>
           </div>
