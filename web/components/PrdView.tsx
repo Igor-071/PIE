@@ -196,7 +196,7 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col space-y-6">
       {/* Header with tabs */}
       <div className="border-b border-[#E7E1E2] pb-4">
         <div className="flex justify-between items-start mb-4">
@@ -238,7 +238,7 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
           )}
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <button
             onClick={() => setViewMode("editor")}
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
@@ -259,6 +259,14 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
           >
             Download Files
           </button>
+          {viewMode === "editor" && (
+            <button
+              onClick={handleCopyMarkdown}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-[#E7E1E2] text-[#161010] hover:bg-[#E7E1E2]/80 transition-all"
+            >
+              Copy Markdown
+            </button>
+          )}
         </div>
         {prdData.hasVersionHistory && (
           <p className="text-xs text-[#161010]/60 mt-2">
@@ -271,23 +279,13 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
       {viewMode === "editor" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main editor area (2/3 width on large screens) */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Actions bar */}
-            <div className="flex justify-end">
-              <button
-                onClick={handleCopyMarkdown}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-[#E7E1E2] text-[#161010] hover:bg-[#E7E1E2]/80 transition-all"
-              >
-                Copy Markdown
-              </button>
-            </div>
-
+          <div className="lg:col-span-2 flex flex-col space-y-4">
             {/* Editor */}
-            <div className="border-2 border-[#E7E1E2] rounded-lg bg-white">
-              <div className="border-b border-[#E7E1E2] px-4 py-2">
+            <div className="border-2 border-[#E7E1E2] rounded-lg bg-white flex flex-col h-[600px]">
+              <div className="border-b border-[#E7E1E2] px-4 py-2 flex-shrink-0">
                 <h3 className="font-semibold text-[#161010] text-sm">Editor</h3>
               </div>
-              <div className="min-h-[600px] max-h-[800px] overflow-y-auto">
+              <div className="flex-1 overflow-y-auto min-h-0">
                 <PrdEditor
                   markdown={prdData.markdown}
                   onChange={handleMarkdownChange}
@@ -309,7 +307,7 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
           </div>
 
           {/* Right sidebar (1/3 width on large screens) */}
-          <div className="space-y-4">
+          <div className="flex flex-col space-y-4">
             {/* Validation details */}
             {prdData.validationResult && prdData.validationResult.details && (
               <div className="border-2 border-[#E7E1E2] rounded-lg p-4 bg-white">
@@ -346,7 +344,7 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
             )}
             
             {/* Chat panel */}
-            <div className="border-2 border-[#E7E1E2] rounded-lg h-[500px] flex flex-col">
+            <div className="border-2 border-[#E7E1E2] rounded-lg flex flex-col h-[600px]">
               <PolishChatPanel
                 jobId={jobId}
                 onProposalReceived={handleProposalReceived}
@@ -404,10 +402,12 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
 
       {/* Download view */}
       {viewMode === "download" && (
-        <DownloadResults
-          jobId={jobId}
-          markdownFilename={markdownFilename}
-        />
+        <div className="flex-1">
+          <DownloadResults
+            jobId={jobId}
+            markdownFilename={markdownFilename}
+          />
+        </div>
       )}
 
       {/* Confirm Discard Proposal Dialog */}

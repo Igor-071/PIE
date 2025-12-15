@@ -118,7 +118,7 @@ export default function WizardShell({
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-4 lg:px-8 py-8">
+      <main className="flex-1 container mx-auto px-4 lg:px-8 py-8 flex flex-col min-h-0">
         {children}
       </main>
     </div>

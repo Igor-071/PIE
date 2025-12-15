@@ -635,14 +635,12 @@ export default function Home() {
 
       {/* Step 3: PRD Workspace */}
       {currentWizardStep === "workspace" && jobState && jobState.status === "complete" && jobState.markdownFilename && (
-        <WizardStep maxWidth="full">
-          <div className="bg-white rounded-lg shadow-lg p-8 border border-[#E7E1E2]">
-            <PrdView
-              jobId={jobState.id}
-              markdownFilename={jobState.markdownFilename}
-            />
-          </div>
-        </WizardStep>
+        <div className="flex-1 flex flex-col min-h-0">
+          <PrdView
+            jobId={jobState.id}
+            markdownFilename={jobState.markdownFilename}
+          />
+        </div>
       )}
 
       {/* Confirm Cancel Job Dialog */}
