@@ -121,7 +121,7 @@ export function addStep(
     };
     
     // Mark previous active step as completed if there is one
-    const updatedSteps = steps.map(step => 
+    const updatedSteps = steps.map((step: Step) => 
       step.status === 'active' ? { ...step, status: 'completed' as const } : step
     );
     

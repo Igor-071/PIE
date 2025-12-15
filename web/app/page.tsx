@@ -5,6 +5,7 @@ import FileUpload from "@/components/FileUpload";
 import BriefFileUpload from "@/components/BriefFileUpload";
 import ProgressTracker from "@/components/ProgressTracker";
 import DownloadResults from "@/components/DownloadResults";
+import PrdView from "@/components/PrdView";
 
 type JobStatus =
   | "pending"
@@ -600,17 +601,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* Download Results */}
+          {/* PRD Editor View */}
           {jobState && jobState.status === "complete" && jobState.markdownFilename && (
             <div className="space-y-6">
-              <div className="text-center border-b border-[#E7E1E2] pb-4">
-                <h2 className="text-2xl font-bold text-[#161010] mb-2">Success!</h2>
-                <p className="text-[#161010] opacity-80">Your PRD has been generated successfully</p>
-              </div>
-              <DownloadResults
+              <PrdView
                 jobId={jobState.id}
                 markdownFilename={jobState.markdownFilename}
               />
+              
               {/* Show token usage and validation results */}
               <ProgressTracker
                 status={jobState.status}
@@ -621,6 +619,7 @@ export default function Home() {
                 tokenUsage={jobState.tokenUsage}
                 validationResult={jobState.validationResult}
               />
+              
               <button
                 onClick={handleReset}
                 className="w-full bg-[#F24B57] text-white py-3 px-4 rounded-lg font-semibold hover:bg-[#F24B57]/90 transition-all duration-200 shadow-md hover:shadow-lg"
