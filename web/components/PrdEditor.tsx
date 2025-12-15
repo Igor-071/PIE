@@ -13,6 +13,11 @@ interface PrdEditorProps {
 
 export interface PrdEditorRef {
   scrollToSection: (sectionName?: string) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  clearHistory: () => void;
 }
 
 /**
@@ -24,12 +29,17 @@ const PrdEditor = forwardRef<PrdEditorRef, PrdEditorProps>(
     const lastAppliedMarkdownRef = useRef<string>("");
     const isInitializedRef = useRef(false);
     const editorContainerRef = useRef<HTMLDivElement>(null);
+    const isUserEditRef = useRef(false);
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4],
+        },
+        history: {
+          // Enable history for undo/redo
+          depth: 50, // Keep last 50 changes in history
         },
       }),
     ],
@@ -38,6 +48,8 @@ const PrdEditor = forwardRef<PrdEditorRef, PrdEditorProps>(
     immediatelyRender: false, // Fix SSR hydration mismatch
     onUpdate: ({ editor }) => {
       if (isInitializedRef.current && !readOnly) {
+        // Mark as user edit when onUpdate fires during initialized state
+        isUserEditRef.current = true;
         // Convert HTML back to markdown (simplified)
         const html = editor.getHTML();
         const simplifiedMarkdown = htmlToMarkdown(html);
@@ -48,11 +60,23 @@ const PrdEditor = forwardRef<PrdEditorRef, PrdEditorProps>(
 
   useEffect(() => {
     if (editor) {
-      // Only update editor content if markdown changed externally (not from typing)
-      if (markdown !== lastAppliedMarkdownRef.current) {
+      // Only update editor content if markdown changed externally (not from user typing)
+      // Skip if this change came from a user edit to preserve history
+      if (markdown !== lastAppliedMarkdownRef.current && !isUserEditRef.current) {
         // Convert markdown to HTML for TipTap
         const html = markdownToHtml(markdown);
-        editor.commands.setContent(html);
+        
+        // Set content without adding to history (false = don't emit update event)
+        // This prevents external content updates from being added to undo history
+        // User edits will create history entries that can be undone
+        editor.commands.setContent(html, false);
+        
+        lastAppliedMarkdownRef.current = markdown;
+        // Reset user edit flag after external update
+        isUserEditRef.current = false;
+      } else if (isUserEditRef.current) {
+        // If this is a user edit, update the ref to match but don't set content
+        // (content is already set by the user's typing, we just need to sync the ref)
         lastAppliedMarkdownRef.current = markdown;
       }
       // Mark as initialized once editor is ready
@@ -62,7 +86,7 @@ const PrdEditor = forwardRef<PrdEditorRef, PrdEditorProps>(
     }
   }, [editor, markdown]);
 
-  // Expose scrollToSection method via ref
+  // Expose methods via ref
   useImperativeHandle(ref, () => ({
     scrollToSection: (sectionName?: string) => {
       if (!editor || !editorContainerRef.current) return;
@@ -128,7 +152,30 @@ const PrdEditor = forwardRef<PrdEditorRef, PrdEditorProps>(
         }
       }, 100);
     },
-  }), [editor]);
+    undo: () => {
+      if (editor && !readOnly) {
+        editor.chain().focus().undo().run();
+      }
+    },
+    redo: () => {
+      if (editor && !readOnly) {
+        editor.chain().focus().redo().run();
+      }
+    },
+    canUndo: () => {
+      return editor ? editor.can().undo() : false;
+    },
+    canRedo: () => {
+      return editor ? editor.can().redo() : false;
+    },
+    clearHistory: () => {
+      if (editor) {
+        // Clear history by setting content to current content without adding to history
+        const currentContent = editor.getHTML();
+        editor.commands.setContent(currentContent, false);
+      }
+    },
+  }), [editor, readOnly]);
 
   if (!editor) {
     return <div className="text-center py-8 text-[#161010]/50">Loading editor...</div>;
