@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import PrdEditor from "./PrdEditor";
 import PolishChatPanel from "./PolishChatPanel";
 import DownloadResults from "./DownloadResults";
+import ConfirmDialog from "./ConfirmDialog";
 
 interface PrdViewProps {
   jobId: string;
@@ -42,6 +43,7 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
   const [showDiff, setShowDiff] = useState(false);
   const [viewMode, setViewMode] = useState<"editor" | "download">("editor");
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   useEffect(() => {
     loadPrdData();
@@ -148,9 +150,14 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
     }
   };
 
-  const handleDiscardProposal = () => {
+  const handleDiscardClick = () => {
+    setShowDiscardConfirm(true);
+  };
+
+  const handleDiscardConfirm = () => {
     setCurrentProposal(null);
     setShowDiff(false);
+    setShowDiscardConfirm(false);
   };
 
   if (isLoading) {
@@ -383,7 +390,7 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
                     Apply
                   </button>
                   <button
-                    onClick={handleDiscardProposal}
+                    onClick={handleDiscardClick}
                     className="flex-1 bg-[#E7E1E2] text-[#161010] py-2 px-4 rounded-lg font-medium hover:bg-[#E7E1E2]/80 transition-all"
                   >
                     Discard
@@ -402,6 +409,18 @@ export default function PrdView({ jobId, markdownFilename }: PrdViewProps) {
           markdownFilename={markdownFilename}
         />
       )}
+
+      {/* Confirm Discard Proposal Dialog */}
+      <ConfirmDialog
+        isOpen={showDiscardConfirm}
+        title="Discard Proposal?"
+        message="Are you sure you want to discard these proposed changes? You can always ask the Polish Agent for new suggestions."
+        confirmLabel="Yes, Discard"
+        cancelLabel="Keep Proposal"
+        confirmVariant="danger"
+        onConfirm={handleDiscardConfirm}
+        onCancel={() => setShowDiscardConfirm(false)}
+      />
     </div>
   );
 }

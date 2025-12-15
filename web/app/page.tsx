@@ -6,6 +6,9 @@ import BriefFileUpload from "@/components/BriefFileUpload";
 import ProgressTracker from "@/components/ProgressTracker";
 import DownloadResults from "@/components/DownloadResults";
 import PrdView from "@/components/PrdView";
+import WizardShell, { WizardStep as WizardStepType } from "@/components/WizardShell";
+import WizardStep from "@/components/WizardStep";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 type JobStatus =
   | "pending"
@@ -77,6 +80,7 @@ export default function Home() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Helper function to fetch with timeout
   const fetchWithTimeout = async (url: string, options: RequestInit = {}): Promise<Response> => {
@@ -398,10 +402,30 @@ export default function Home() {
     setUrlErrors(["", "", ""]);
     setJobState(null);
     setIsProcessing(false);
+    setCurrentWizardStep("inputs");
   };
 
-  const handleCancel = async () => {
+  // Determine current wizard step based on job state
+  const [currentWizardStep, setCurrentWizardStep] = useState<WizardStepType>("inputs");
+
+  useEffect(() => {
+    if (!jobState) {
+      setCurrentWizardStep("inputs");
+    } else if (jobState.status === "complete") {
+      setCurrentWizardStep("workspace");
+    } else {
+      setCurrentWizardStep("processing");
+    }
+  }, [jobState?.status]);
+
+  const handleCancelClick = () => {
+    setShowCancelConfirm(true);
+  };
+
+  const handleCancelConfirm = async () => {
     if (!jobState) return;
+
+    setShowCancelConfirm(false);
 
     try {
       const response = await fetch("/api/cancel", {
@@ -447,21 +471,20 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#161010]">
-      <div className="container mx-auto px-4 py-12 max-w-5xl">
-        <div className="bg-white rounded-lg shadow-lg p-8 space-y-8 border border-[#E7E1E2]">
-          {/* Header */}
-          <div className="text-center border-b border-[#E7E1E2] pb-6">
-            <h1 className="text-4xl font-bold text-[#161010] mb-2">
-              Product Intelligence Engine
-            </h1>
-            <p className="text-[#161010] text-lg">
-              Convert your ZIP repository or prototype links into a structured Product Requirements Document
-            </p>
-          </div>
-
-          {/* File Upload */}
-          {!jobState && (
+    <WizardShell
+      currentStep={currentWizardStep}
+      onStartOver={handleReset}
+      showStartOver={currentWizardStep !== "inputs"}
+    >
+      {/* Step 1: Inputs */}
+      {currentWizardStep === "inputs" && (
+        <WizardStep
+          title="Upload Your Project"
+          description="Provide your repository ZIP and/or prototype URLs to generate a comprehensive PRD"
+          maxWidth="lg"
+        >
+          <div className="bg-white rounded-lg shadow-lg p-8 space-y-8 border border-[#E7E1E2]">
+            {/* File Upload */}
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-[#161010] mb-3">
@@ -555,22 +578,29 @@ export default function Home() {
                 {isProcessing ? "Processing..." : "Generate PRD"}
               </button>
             </div>
-          )}
+          </div>
+        </WizardStep>
+      )}
 
-          {/* Progress Tracker - Show immediately when jobState exists */}
-          {jobState && jobState.status !== "complete" && (
+      {/* Step 2: Processing */}
+      {currentWizardStep === "processing" && jobState && jobState.status !== "complete" && (
+        <WizardStep
+          title="Generating Your PRD"
+          description="Analyzing your project and extracting requirements"
+          maxWidth="xl"
+        >
+          <div className="bg-white rounded-lg shadow-lg p-8 border border-[#E7E1E2]">
             <div className="space-y-6">
-              <div className="flex items-center justify-between border-b border-[#E7E1E2] pb-4">
-                <h2 className="text-xl font-semibold text-[#161010]">Processing...</h2>
-                {jobState.status !== "error" && jobState.status !== "cancelled" && (
+              {jobState.status !== "error" && jobState.status !== "cancelled" && (
+                <div className="flex items-center justify-end mb-4">
                   <button
-                    onClick={handleCancel}
+                    onClick={handleCancelClick}
                     className="px-5 py-2 bg-[#F24B57] text-white rounded-lg font-medium hover:bg-[#F24B57]/90 transition-all duration-200"
                   >
-                    Cancel
+                    Cancel Job
                   </button>
-                )}
-              </div>
+                </div>
+              )}
               <ProgressTracker
                 status={jobState.status}
                 progress={jobState.progress}
@@ -581,55 +611,51 @@ export default function Home() {
                 validationResult={jobState.validationResult}
               />
               {(jobState.status === "error" || jobState.status === "cancelled") && (
-                <div className="flex gap-3">
+                <div className="flex gap-3 justify-center mt-8">
                   {jobState.networkError && (
                     <button
                       onClick={handleRetry}
-                      className="flex-1 bg-[#F24B57] text-white py-3 px-4 rounded-lg font-semibold hover:bg-[#F24B57]/90 transition-all duration-200"
+                      className="px-8 py-3 bg-[#F24B57] text-white rounded-lg font-semibold hover:bg-[#F24B57]/90 transition-all duration-200"
                     >
                       Retry Connection
                     </button>
                   )}
                   <button
                     onClick={handleReset}
-                    className={`${jobState.networkError ? "flex-1" : "w-full"} bg-[#E7E1E2] text-[#161010] py-3 px-4 rounded-lg font-semibold hover:bg-[#E7E1E2]/80 transition-all duration-200`}
+                    className="px-8 py-3 bg-[#E7E1E2] text-[#161010] rounded-lg font-semibold hover:bg-[#E7E1E2]/80 transition-all duration-200"
                   >
                     Start Over
                   </button>
                 </div>
               )}
             </div>
-          )}
+          </div>
+        </WizardStep>
+      )}
 
-          {/* PRD Editor View */}
-          {jobState && jobState.status === "complete" && jobState.markdownFilename && (
-            <div className="space-y-6">
-              <PrdView
-                jobId={jobState.id}
-                markdownFilename={jobState.markdownFilename}
-              />
-              
-              {/* Show token usage and validation results */}
-              <ProgressTracker
-                status={jobState.status}
-                progress={jobState.progress}
-                message={jobState.message}
-                error={jobState.error}
-                steps={jobState.steps}
-                tokenUsage={jobState.tokenUsage}
-                validationResult={jobState.validationResult}
-              />
-              
-              <button
-                onClick={handleReset}
-                className="w-full bg-[#F24B57] text-white py-3 px-4 rounded-lg font-semibold hover:bg-[#F24B57]/90 transition-all duration-200 shadow-md hover:shadow-lg"
-              >
-                Generate Another PRD
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+      {/* Step 3: PRD Workspace */}
+      {currentWizardStep === "workspace" && jobState && jobState.status === "complete" && jobState.markdownFilename && (
+        <WizardStep maxWidth="full">
+          <div className="bg-white rounded-lg shadow-lg p-8 border border-[#E7E1E2]">
+            <PrdView
+              jobId={jobState.id}
+              markdownFilename={jobState.markdownFilename}
+            />
+          </div>
+        </WizardStep>
+      )}
+
+      {/* Confirm Cancel Job Dialog */}
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title="Cancel Job?"
+        message="Are you sure you want to cancel this PRD generation? All progress will be lost and you'll need to start over."
+        confirmLabel="Yes, Cancel Job"
+        cancelLabel="Keep Processing"
+        confirmVariant="danger"
+        onConfirm={handleCancelConfirm}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
+    </WizardShell>
   );
 }
